@@ -2,10 +2,11 @@ package websocket
 
 import (
 	"errors"
-
-	"honnef.co/go/js/dom"
+	"runtime"
 
 	"github.com/gopherjs/gopherjs/js"
+	"honnef.co/go/js/dom"
+	"honnef.co/go/js/util"
 )
 
 type readyState int
@@ -17,38 +18,131 @@ const (
 	closed                       // The connection is closed or couldn't be opened.
 )
 
+type receiveItem struct {
+	Error error
+	Event *dom.MessageEvent
+}
+
+const (
+	// Ready state constants from https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
+	CONNECTING = 0
+	OPEN       = 1
+	CLOSING    = 2
+	CLOSED     = 3
+)
+
+var (
+	ErrSocketClosed = errors.New("the socket has been closed")
+)
+
+// See https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Attributes for
+// information about attributes.
 type WebSocket struct {
 	js.Object
+	util.EventTarget
+
+	BinaryType     string `js:"binaryType"`
+	BufferedAmount uint32 `js:"bufferedAmount"`
+	Extensions     string `js:"extensions"`
+	Protocol       string `js:"protocol"`
+	// Use the CONNECTING, OPEN, CLOSING, and CLOSED constants defined above for
+	// ReadyState.
+	ReadyState uint16 `js:"readyState"`
+	URL        string `js:"url"`
+
+	ch     chan *receiveItem
+	openCh chan *js.Error
 }
 
-func New(url string) *WebSocket {
+// New creates a new WebSocket. It blocks until the connect opens or throws an
+// error.
+func New(url string) (*WebSocket, error) {
 	object := js.Global.Get("WebSocket").New(url)
-	ws := &WebSocket{Object: object}
-	return ws
+	ws := &WebSocket{
+		Object:      object,
+		EventTarget: util.EventTarget{Object: object},
+		ch:          make(chan *receiveItem),
+		openCh:      make(chan *js.Error),
+	}
+	ws.init()
+	err, ok := <-ws.openCh
+	if ok && err != nil {
+		ws.Close() // Just in case the connection was open for some reason?
+		return nil, err
+	}
+	return ws, nil
 }
 
-func (ws *WebSocket) OnOpen(listener func(js.Object)) {
-	ws.Object.Set("onopen", listener)
+func (ws *WebSocket) init() {
+	ws.BinaryType = "arraybuffer"
+	ws.EventTarget.AddEventListener("open", false, ws.onOpen)
+	ws.EventTarget.AddEventListener("close", false, ws.onClose)
+	ws.EventTarget.AddEventListener("error", false, ws.onError)
+	ws.EventTarget.AddEventListener("message", false, ws.onMessage)
 }
 
-func (ws *WebSocket) OnClose(listener func(js.Object)) {
-	ws.Object.Set("onclose", listener)
+func (ws *WebSocket) onOpen(event js.Object) {
+	close(ws.openCh)
 }
 
-func (ws *WebSocket) OnMessage(listener func(messageEvent *dom.MessageEvent)) {
-	wrapper := func(object js.Object) { listener(&dom.MessageEvent{BasicEvent: &dom.BasicEvent{Object: object}}) }
-	ws.Object.Set("onmessage", wrapper)
+func (ws *WebSocket) onClose(event js.Object) {
+	wasClean := event.Get("wasClean").Bool()
+	if !wasClean {
+		go func() {
+			defer func() {
+				// This feels extremely hacky, but I can't think of a better way
+				// to do it. openCh is closed before the end of New(), but this
+				// is one of the paths that can close it. The other is in
+				// WebSocket.onOpen.
+				e := recover()
+				if e == nil {
+					return
+				}
+				if e, ok := e.(runtime.Error); ok && e.Error() == "runtime error: send on closed channel" {
+					return
+				}
+				panic(e)
+			}()
+
+			// If the close wasn't clean, we need to inform the openCh. This
+			// allows New to return an error.
+			ws.openCh <- &js.Error{Object: event}
+			close(ws.openCh)
+		}()
+	}
+	close(ws.ch)
 }
 
-func (ws *WebSocket) Send(data string) (err error) {
+func (ws *WebSocket) onError(event js.Object) {
+	go func() {
+		ws.ch <- &receiveItem{
+			Event: nil,
+			Error: &js.Error{Object: event},
+		}
+	}()
+}
+
+func (ws *WebSocket) onMessage(event js.Object) {
+	go func() {
+		ws.ch <- &receiveItem{
+			Event: dom.WrapEvent(event).(*dom.MessageEvent),
+			Error: nil,
+		}
+	}()
+}
+
+// SendRaw sends a message on the WebSocket. The data argument can be a string
+// or a js.Object containing an ArrayBuffer.
+//
+// The helper functions SendString and SendBinary should be preferred to this.
+func (ws *WebSocket) SendRaw(data interface{}) (err error) {
 	defer func() {
 		e := recover()
 		if e == nil {
 			return
 		}
 		if jsErr, ok := e.(*js.Error); ok && jsErr != nil {
-			println(jsErr.Object.Get("name").Str() == "InvalidStateError")
-			err = errors.New("InvalidStateError")
+			err = jsErr
 		} else {
 			panic(e)
 		}
@@ -57,6 +151,37 @@ func (ws *WebSocket) Send(data string) (err error) {
 	return nil
 }
 
+// SendString sends a string on the WebSocket. This is a helper method that
+// calls SendRaw.
+func (ws *WebSocket) SendString(data string) error {
+	return ws.SendRaw(data)
+}
+
+// Write sends binary data on the WebSocket.
+//
+// Note: There are bugs where the browser will throw an exception if it believes
+// that received data is UTF-8.
+func (ws *WebSocket) Write(p []byte) (int, error) {
+	// We use Write to conform with the io.Writer interface.
+	err := ws.SendRaw(p)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// Receive receives one message from the WebSocket. It blocks until the message
+// is received.
+func (ws *WebSocket) Receive() (*dom.MessageEvent, error) {
+	item, ok := <-ws.ch
+	if !ok { // The channel has been closed
+		return nil, ErrSocketClosed
+	}
+	return item.Event, item.Error
+}
+
+// Close closes the underlying WebSocket and cleans up any resources associated
+// with the helper.
 func (ws *WebSocket) Close() (err error) {
 	defer func() {
 		e := recover()
