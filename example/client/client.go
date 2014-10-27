@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/nightexcessive/websocket"
+	"github.com/gopherjs/websocket"
 )
 
 func testMessage(socket *websocket.WebSocket, message string) {
