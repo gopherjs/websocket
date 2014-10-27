@@ -24,7 +24,8 @@ type receiveItem struct {
 }
 
 const (
-	// Ready state constants from https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
+	// Ready state constants from
+	// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
 	CONNECTING = 0
 	OPEN       = 1
 	CLOSING    = 2
@@ -35,12 +36,12 @@ var (
 	ErrSocketClosed = errors.New("the socket has been closed")
 )
 
-// See https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Attributes for
-// information about attributes.
 type WebSocket struct {
 	js.Object
 	util.EventTarget
 
+	// See https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Attributes
+	// for information about these attributes.
 	BinaryType     string `js:"binaryType"`
 	BufferedAmount uint32 `js:"bufferedAmount"`
 	Extensions     string `js:"extensions"`
@@ -58,6 +59,7 @@ type WebSocket struct {
 // error.
 func New(url string) (*WebSocket, error) {
 	object := js.Global.Get("WebSocket").New(url)
+
 	ws := &WebSocket{
 		Object:      object,
 		EventTarget: util.EventTarget{Object: object},
@@ -65,16 +67,23 @@ func New(url string) (*WebSocket, error) {
 		openCh:      make(chan *js.Error),
 	}
 	ws.init()
+
+	// Wait for the WebSocket to open or error. See: onOpen & onClose.
 	err, ok := <-ws.openCh
 	if ok && err != nil {
 		ws.Close() // Just in case the connection was open for some reason?
 		return nil, err
 	}
+
 	return ws, nil
 }
 
 func (ws *WebSocket) init() {
+	// Some browsers don't support Blobs. On top of that, []byte is converted to
+	// Int8Array, which is handled similarly to ArrayBuffer.
 	ws.BinaryType = "arraybuffer"
+
+	// Add all of the event handlers.
 	ws.EventTarget.AddEventListener("open", false, ws.onOpen)
 	ws.EventTarget.AddEventListener("close", false, ws.onClose)
 	ws.EventTarget.AddEventListener("error", false, ws.onError)
@@ -86,8 +95,7 @@ func (ws *WebSocket) onOpen(event js.Object) {
 }
 
 func (ws *WebSocket) onClose(event js.Object) {
-	wasClean := event.Get("wasClean").Bool()
-	if !wasClean {
+	if wasClean := event.Get("wasClean").Bool(); !wasClean {
 		go func() {
 			defer func() {
 				// This feels extremely hacky, but I can't think of a better way
@@ -114,7 +122,12 @@ func (ws *WebSocket) onClose(event js.Object) {
 }
 
 func (ws *WebSocket) onError(event js.Object) {
+	// TODO: Don't send to ws.ch when this is a connection error.
+	// onError is called when a connection fails. Such errors shouldn't be sent
+	// to ws.ch.
 	go func() {
+		// This allows Receive to return an error. It seems that many
+		// WebSocket.send errors are handled this way.
 		ws.ch <- &receiveItem{
 			Event: nil,
 			Error: &js.Error{Object: event},
