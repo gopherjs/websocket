@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cd "$( dirname "${BASH_SOURCE[0]}" )/client"
+exec gopherjs build -w --output="client.js" client.go
