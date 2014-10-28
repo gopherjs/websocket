@@ -9,32 +9,25 @@ import (
 	"honnef.co/go/js/util"
 )
 
-type readyState int
+type ReadyState uint16
 
 const (
-	connecting readyState = iota // The connection is not yet open.
-	open                         // The connection is open and ready to communicate.
-	closing                      // The connection is in the process of closing.
-	closed                       // The connection is closed or couldn't be opened.
+	// Ready state constants from
+	// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
+	Connecting ReadyState = 0 // The connection is not yet open.
+	Open                  = 1 // The connection is open and ready to communicate.
+	Closing               = 2 // The connection is in the process of closing.
+	Closed                = 3 // The connection is closed or couldn't be opened.
+)
+
+var (
+	ErrSocketClosed = errors.New("the socket has been closed")
 )
 
 type receiveItem struct {
 	Error error
 	Event *dom.MessageEvent
 }
-
-const (
-	// Ready state constants from
-	// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
-	CONNECTING = 0
-	OPEN       = 1
-	CLOSING    = 2
-	CLOSED     = 3
-)
-
-var (
-	ErrSocketClosed = errors.New("the socket has been closed")
-)
 
 type WebSocket struct {
 	js.Object
