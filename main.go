@@ -35,21 +35,19 @@ type WebSocket struct {
 
 	// See https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Attributes
 	// for information about these attributes.
-	BinaryType     string `js:"binaryType"`
-	BufferedAmount uint32 `js:"bufferedAmount"`
-	Extensions     string `js:"extensions"`
-	Protocol       string `js:"protocol"`
-	// Use the CONNECTING, OPEN, CLOSING, and CLOSED constants defined above for
-	// ReadyState.
-	ReadyState ReadyState `js:"readyState"`
-	URL        string     `js:"url"`
+	BinaryType     string     `js:"binaryType"`
+	BufferedAmount uint32     `js:"bufferedAmount"`
+	Extensions     string     `js:"extensions"`
+	Protocol       string     `js:"protocol"`
+	ReadyState     ReadyState `js:"readyState"`
+	URL            string     `js:"url"`
 
 	ch     chan *receiveItem
 	openCh chan *js.Error
 }
 
-// New creates a new WebSocket. It blocks until the connect opens or throws an
-// error.
+// New creates a new WebSocket. It blocks until the connection opens or throws
+// an error.
 func New(url string) (*WebSocket, error) {
 	object := js.Global.Get("WebSocket").New(url)
 
@@ -165,8 +163,8 @@ func (ws *WebSocket) SendString(data string) error {
 
 // Write sends binary data on the WebSocket.
 //
-// Note: There are bugs where the browser will throw an exception if it believes
-// that received data is UTF-8.
+// Note: There are cases where the browser will throw an exception if it
+// believes that the data passed to this function may be UTF-8.
 func (ws *WebSocket) Write(p []byte) (int, error) {
 	// We use Write to conform with the io.Writer interface.
 	err := ws.SendRaw(p)
