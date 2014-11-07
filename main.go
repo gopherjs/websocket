@@ -41,8 +41,8 @@ type WebSocket struct {
 	Protocol       string `js:"protocol"`
 	// Use the CONNECTING, OPEN, CLOSING, and CLOSED constants defined above for
 	// ReadyState.
-	ReadyState uint16 `js:"readyState"`
-	URL        string `js:"url"`
+	ReadyState ReadyState `js:"readyState"`
+	URL        string     `js:"url"`
 
 	ch     chan *receiveItem
 	openCh chan *js.Error
