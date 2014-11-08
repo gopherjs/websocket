@@ -1,8 +1,12 @@
 package websocket
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"net/url"
 	"runtime"
+	"time"
 
 	"github.com/gopherjs/gopherjs/js"
 	"honnef.co/go/js/dom"
@@ -24,6 +28,13 @@ var (
 	ErrSocketClosed = errors.New("the socket has been closed")
 )
 
+type Addr struct {
+	*url.URL
+}
+
+// Network returns the network type for a WebSocket, "websocket".
+func (addr *Addr) Network() string { return "websocket" }
+
 type receiveItem struct {
 	Error error
 	Event *dom.MessageEvent
@@ -42,8 +53,10 @@ type WebSocket struct {
 	ReadyState     ReadyState `js:"readyState"`
 	URL            string     `js:"url"`
 
-	ch     chan *receiveItem
 	openCh chan *js.Error
+
+	ch      chan *receiveItem
+	readBuf *bytes.Reader
 }
 
 // New creates a new WebSocket. It blocks until the connection opens or throws
@@ -135,11 +148,11 @@ func (ws *WebSocket) onMessage(event js.Object) {
 	}()
 }
 
-// SendRaw sends a message on the WebSocket. The data argument can be a string
+// sendRaw sends a message on the WebSocket. The data argument can be a string
 // or a js.Object containing an ArrayBuffer.
 //
-// The helper functions SendString and SendBinary should be preferred to this.
-func (ws *WebSocket) SendRaw(data interface{}) (err error) {
+// The helper functions WriteString and SendBinary should be preferred to this.
+func (ws *WebSocket) sendRaw(data interface{}) (err error) {
 	defer func() {
 		e := recover()
 		if e == nil {
@@ -155,33 +168,78 @@ func (ws *WebSocket) SendRaw(data interface{}) (err error) {
 	return nil
 }
 
+// ReceiveFrame receives one full frame from the WebSocket. It blocks until the
+// frame is received.
+func (ws *WebSocket) ReceiveFrame() (*dom.MessageEvent, error) {
+	item, ok := <-ws.ch
+	if !ok { // The channel has been closed
+		return nil, ErrSocketClosed
+	}
+	return item.Event, item.Error
+}
+
 // SendString sends a string on the WebSocket. This is a helper method that
 // calls SendRaw.
-func (ws *WebSocket) SendString(data string) error {
-	return ws.SendRaw(data)
+func (ws *WebSocket) WriteString(data string) (n int, err error) {
+	err = ws.sendRaw(data)
+	if err != nil {
+		n = len(data)
+	}
+	return
+}
+
+// Read implements the io.Reader interface:
+// It reads the data of a frame from the WebSocket connection. If b is not large
+// enough, the next Read will read the rest of that frame.
+func (ws *WebSocket) Read(b []byte) (n int, err error) {
+	if ws.readBuf != nil {
+		n, err = ws.readBuf.Read(b)
+		if err == io.EOF {
+			ws.readBuf = nil
+			err = nil
+		}
+		// If we read nothing from the buffer, continue to trying to receive.
+		// This saves us when the last Read call emptied the buffer and this
+		// call triggers the EOF. There's probably a better way of doing this,
+		// but I'm really tired.
+		if n > 0 {
+			return
+		}
+	}
+
+	frame, err := ws.ReceiveFrame()
+	if err != nil {
+		return 0, err
+	}
+
+	receivedBytes := []byte(frame.Data.Str())
+	// fast path
+	if len(b) >= len(receivedBytes) {
+		n = copy(b, receivedBytes)
+		return
+	}
+
+	ws.readBuf = bytes.NewReader(receivedBytes)
+
+	n, err = ws.readBuf.Read(b)
+	if err == io.EOF {
+		ws.readBuf = nil
+		err = nil
+	}
+	return
 }
 
 // Write sends binary data on the WebSocket.
 //
 // Note: There are cases where the browser will throw an exception if it
 // believes that the data passed to this function may be UTF-8.
-func (ws *WebSocket) Write(p []byte) (int, error) {
+func (ws *WebSocket) Write(p []byte) (n int, err error) {
 	// We use Write to conform with the io.Writer interface.
-	err := ws.SendRaw(p)
+	err = ws.sendRaw(p)
 	if err != nil {
-		return 0, err
+		n = len(p)
 	}
-	return len(p), nil
-}
-
-// Receive receives one message from the WebSocket. It blocks until the message
-// is received.
-func (ws *WebSocket) Receive() (*dom.MessageEvent, error) {
-	item, ok := <-ws.ch
-	if !ok { // The channel has been closed
-		return nil, ErrSocketClosed
-	}
-	return item.Event, item.Error
+	return
 }
 
 // Close closes the underlying WebSocket and cleans up any resources associated
@@ -200,4 +258,39 @@ func (ws *WebSocket) Close() (err error) {
 	}()
 	ws.Object.Call("close")
 	return nil
+}
+
+func (ws *WebSocket) LocalAddr() *Addr {
+	// We can't use net.Addr, because net.init() causes a panic due to attempts
+	// to make syscalls.
+
+	// TODO: Find a more graceful way to handle this.
+	panic("It is not possible to implement this function due to limitations within JavaScript")
+}
+
+func (ws *WebSocket) RemoteAddr() *Addr {
+	// We can't use net.Addr, because net.init() causes a panic due to attempts
+	// to make syscalls.
+
+	wsURL, err := url.Parse(ws.URL)
+	if err != nil {
+		// TODO: Should we be panicking for this?
+		panic(err)
+	}
+	return &Addr{wsURL}
+}
+
+func (ws *WebSocket) SetDeadline(t time.Time) error {
+	// TODO: Implement
+	panic("not yet implemeneted")
+}
+
+func (ws *WebSocket) SetReadDeadline(t time.Time) error {
+	// TODO: Implement
+	panic("not yet implemeneted")
+}
+
+func (ws *WebSocket) SetWriteDeadline(t time.Time) error {
+	// TODO: Implement
+	panic("not yet implemeneted")
 }
