@@ -9,26 +9,32 @@ import (
 	"honnef.co/go/js/util"
 )
 
+// ReadyState represents the state that a WebSocket is in. For more information
+// about the available states, see
+// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
 type ReadyState uint16
 
+// Ready state constants from
+// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
 const (
-	// Ready state constants from
-	// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
 	Connecting ReadyState = 0 // The connection is not yet open.
 	Open                  = 1 // The connection is open and ready to communicate.
 	Closing               = 2 // The connection is in the process of closing.
 	Closed                = 3 // The connection is closed or couldn't be opened.
 )
 
-var (
-	ErrSocketClosed = errors.New("the socket has been closed")
-)
+// ErrSocketClosed is returned when an operation is attempted on a
+// closed socket.
+var ErrSocketClosed = errors.New("the socket has been closed")
 
 type receiveItem struct {
 	Error error
 	Event *dom.MessageEvent
 }
 
+// WebSocket is a convenience wrapper around the browser's WebSocket
+// implementation. For more information, see
+// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
 type WebSocket struct {
 	js.Object
 	util.EventTarget
