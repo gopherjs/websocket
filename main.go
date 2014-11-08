@@ -14,6 +14,21 @@ import (
 // https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
 type ReadyState uint16
 
+func (rs ReadyState) String() string {
+	switch rs {
+	case Connecting:
+		return "Connecting"
+	case Open:
+		return "Open"
+	case Closing:
+		return "Closing"
+	case Closed:
+		return "Closed"
+	default:
+		return "Unknown"
+	}
+}
+
 // Ready state constants from
 // https://developer.mozilla.org/en-US/docs/Web/API/WebSocket#Ready_state_constants
 const (
