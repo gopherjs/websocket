@@ -192,7 +192,7 @@ func (ws *WebSocket) WriteString(data string) (n int, err error) {
 // It reads the data of a frame from the WebSocket connection. If b is not large
 // enough, the next Read will read the rest of that frame.
 func (ws *WebSocket) Read(b []byte) (n int, err error) {
-	// TODO: Make this fully full the buffer once the Timeout functions are
+	// TODO: Make this fully fill the buffer once the Timeout functions are
 	// implemented.
 
 	if ws.readBuf != nil {
