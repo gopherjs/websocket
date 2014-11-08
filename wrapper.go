@@ -30,12 +30,12 @@ const (
 	Connecting ReadyState = 0
 	// Open means that the WebSocket connection is established and communication
 	// is possible.
-	Open = 1
+	Open ReadyState = 1
 	// Closing means that the connection is going through the closing handshake,
 	// or the Close() method has been invoked.
-	Closing = 2
+	Closing ReadyState = 2
 	// Closed means that the connection has been closed or could not be opened.
-	Closed = 3
+	Closed ReadyState = 3
 )
 
 // WebSocket is a low-level convenience wrapper around the browser's WebSocket
