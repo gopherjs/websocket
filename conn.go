@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/url"
 	"time"
@@ -10,16 +11,36 @@ import (
 	"honnef.co/go/js/dom"
 )
 
-func beginHandlerOpen(ch chan error) func(ev js.Object) {
+func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev js.Object) {
 	return func(ev js.Object) {
+		removeHandlers()
 		close(ch)
 	}
 }
 
-func beginHandlerClose(ch chan error) func(ev js.Object) {
+// closeError allows a CloseEvent to be used as an error.
+type closeError struct {
+	*dom.CloseEvent
+}
+
+func (e *closeError) Error() string {
+	var cleanStmt string
+	if e.WasClean {
+		cleanStmt = "clean"
+	} else {
+		cleanStmt = "unclean"
+	}
+	return fmt.Sprintf("CloseEvent: (%s) (%d) %s", cleanStmt, e.Code, e.Reason)
+}
+
+func beginHandlerClose(ch chan error, removeHandlers func()) func(ev js.Object) {
 	return func(ev js.Object) {
-		ch <- &js.Error{Object: ev}
-		close(ch)
+		removeHandlers()
+		go func() {
+			ce := dom.WrapEvent(ev).(*dom.CloseEvent)
+			ch <- &closeError{CloseEvent: ce}
+			close(ch)
+		}()
 	}
 }
 
@@ -30,31 +51,39 @@ func Dial(url string) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	openCh := make(chan error, 1)
-
-	// We have to use variables for the functions so that we can remove the
-	// event handlers afterwards.
-	openHandler := beginHandlerOpen(openCh)
-	closeHandler := beginHandlerClose(openCh)
-
-	ws.AddEventListener("open", false, openHandler)
-	ws.AddEventListener("close", false, closeHandler)
-
-	err, ok := <-openCh
-
-	ws.RemoveEventListener("open", false, openHandler)
-	ws.RemoveEventListener("close", false, closeHandler)
-
-	if ok && err != nil {
-		return nil, err
-	}
-
 	conn := &Conn{
 		WebSocket: ws,
 		ch:        make(chan *dom.MessageEvent, 1),
 	}
 	conn.Initialize()
+
+	openCh := make(chan error, 1)
+
+	var (
+		openHandler  func(ev js.Object)
+		closeHandler func(ev js.Object)
+	)
+
+	// Handlers need to be removed to prevent a panic when the WebSocket closes
+	// immediately and fires both open and close before they can be removed.
+	// This way, handlers are removed before the channel is closed.
+	removeHandlers := func() {
+		ws.RemoveEventListener("open", false, openHandler)
+		ws.RemoveEventListener("close", false, closeHandler)
+	}
+
+	// We have to use variables for the functions so that we can remove the
+	// event handlers afterwards.
+	openHandler = beginHandlerOpen(openCh, removeHandlers)
+	closeHandler = beginHandlerClose(openCh, removeHandlers)
+
+	ws.AddEventListener("open", false, openHandler)
+	ws.AddEventListener("close", false, closeHandler)
+
+	err, ok := <-openCh
+	if ok && err != nil {
+		return nil, err
+	}
 
 	return conn, nil
 }
