@@ -1,7 +1,8 @@
 package main
 
 import (
-	"io"
+	"bytes"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -9,7 +10,28 @@ import (
 )
 
 func echoHandler(ws *websocket.Conn) {
-	io.Copy(ws, ws)
+	var strMessage string
+	fmt.Println("Receiving first message...")
+	websocket.Message.Receive(ws, &strMessage)
+	fmt.Printf("Got first message: %q\n", strMessage)
+	if strMessage != "Hello, String!" {
+		fmt.Println("First message was bad.")
+		return
+	}
+	fmt.Println("Returning first message...")
+	websocket.Message.Send(ws, strMessage)
+
+	var byteMessage []byte
+	fmt.Println("Receiving second message...")
+	websocket.Message.Receive(ws, &byteMessage)
+	fmt.Printf("Got second message: % x\n", byteMessage)
+	if !bytes.Equal(byteMessage, []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05}) {
+		fmt.Println("Second message was bad.")
+		return
+	}
+	fmt.Println("Returning second message...")
+	websocket.Message.Send(ws, byteMessage)
+	fmt.Println("Done.")
 }
 
 func main() {
