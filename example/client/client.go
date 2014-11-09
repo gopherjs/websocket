@@ -113,7 +113,7 @@ func main() {
 				console.Warn("Error while disconnecting:", err)
 				return
 			}
-			fmt.Printf("Cleanly disconnected.")
+			fmt.Println("Cleanly disconnected.")
 		}()
 
 		stepOne(c)
