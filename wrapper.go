@@ -38,6 +38,32 @@ const (
 	Closed ReadyState = 3
 )
 
+// New creates a new low-level WebSocket. It immediately returns the new
+// WebSocket.
+func New(url string) (ws *WebSocket, err error) {
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if jsErr, ok := e.(*js.Error); ok && jsErr != nil {
+			ws = nil
+			err = jsErr
+		} else {
+			panic(e)
+		}
+	}()
+
+	object := js.Global.Get("WebSocket").New(url)
+
+	ws = &WebSocket{
+		Object:      object,
+		EventTarget: util.EventTarget{Object: object},
+	}
+
+	return
+}
+
 // WebSocket is a low-level convenience wrapper around the browser's WebSocket
 // object. For more information, see
 // http://dev.w3.org/html5/websockets/#the-websocket-interface
@@ -99,16 +125,4 @@ func (ws *WebSocket) Close() (err error) {
 	}()
 	ws.Object.Call("close")
 	return
-}
-
-// New creates a new WebSocket. It immediately returns the new WebSocket.
-func New(url string) *WebSocket {
-	object := js.Global.Get("WebSocket").New(url)
-
-	ws := &WebSocket{
-		Object:      object,
-		EventTarget: util.EventTarget{Object: object},
-	}
-
-	return ws
 }
