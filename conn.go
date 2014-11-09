@@ -109,15 +109,13 @@ func (c *Conn) receiveFrame() (*dom.MessageEvent, error) {
 }
 
 func getFrameData(obj js.Object) []byte {
-	// TODO(nightexcessive): Is there a better way to do this?
-
-	frameStr := obj.Str()
-	if frameStr == "[object ArrayBuffer]" {
+	// Check if it's an array buffer. If so, convert it to a Go byte slice.
+	if constructor := obj.Get("constructor"); constructor == js.Global.Get("ArrayBuffer") {
 		int8Array := js.Global.Get("Uint8Array").New(obj)
 		return int8Array.Interface().([]byte)
 	}
 
-	return []byte(frameStr)
+	return []byte(obj.Str())
 }
 
 func (c *Conn) Read(b []byte) (n int, err error) {
