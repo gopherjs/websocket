@@ -205,9 +205,11 @@ func (c *Conn) WriteString(s string) (n int, err error) {
 	return
 }
 
-// BUG(nightexcessive): We can't return net.Addr from Conn.LocalAddr and
-// Conn.RemoteAddr because net.init() causes a panic due to attempts to make
-// syscalls. See: https://github.com/gopherjs/gopherjs/issues/123
+// BUG(nightexcessive): Conn doesn't currently fulfill the net.Conn interface
+// because we can't return net.Addr from Conn.LocalAddr and Conn.RemoteAddr
+// because net.init() causes a panic due to attempts to make syscalls.
+//
+// See: https://github.com/gopherjs/gopherjs/issues/123
 
 // LocalAddr would typically return the local network address, but due to
 // limitations in the JavaScript API, it is unable to. Calling this method will
