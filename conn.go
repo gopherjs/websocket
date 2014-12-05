@@ -188,8 +188,6 @@ func getFrameData(obj js.Object) []byte {
 }
 
 func (c *Conn) Read(b []byte) (n int, err error) {
-	// TODO(nightexcessive): Implement the deadline functions.
-
 	if c.readBuf != nil {
 		n, err = c.readBuf.Read(b)
 		if err == io.EOF {
