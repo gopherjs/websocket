@@ -1,7 +1,0 @@
-#!/bin/sh
-
-# Changes to: /script/directory/client
-# This handles a case where the script would fail if it were executed with a
-# working directory outside of its own directory.
-cd "$( dirname "${BASH_SOURCE[0]}" )/client"
-exec gopherjs build -w --output="client.js" client.go

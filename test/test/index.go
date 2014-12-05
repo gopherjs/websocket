@@ -1,3 +1,5 @@
+//go:generate gopherjs build -m index.go
+
 package main
 
 import (
