@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/gopherjs/gopherjs/js"
 	"github.com/gopherjs/websocket"
@@ -148,6 +149,40 @@ func main() {
 				qunit.Ok(false, fmt.Sprintf("Unexpected error in second read: %s", err))
 			} else {
 				qunit.Ok(false, "Expected EOF in second read, got no error")
+			}
+		}()
+
+		return nil
+	})
+	qunit.AsyncTest("Timeout", func() interface{} {
+		qunit.Expect(2)
+
+		go func() {
+			defer qunit.Start()
+
+			ws, err := websocket.Dial(wsBaseURL + "wait-30s")
+			if err != nil {
+				qunit.Ok(false, fmt.Sprintf("Error opening WebSocket: %s", err))
+				return
+			}
+
+			qunit.Ok(true, "WebSocket opened")
+
+			start := time.Now()
+			ws.SetReadDeadline(start.Add(1 * time.Second))
+
+			_, err = ws.Read(nil)
+			if err != nil && err.Error() == "i/o timeout: deadline reached" {
+				totalTime := time.Now().Sub(start)
+				if totalTime < 750*time.Millisecond {
+					qunit.Ok(false, fmt.Sprintf("Timeout was too short: Received timeout after %s", totalTime))
+					return
+				}
+				qunit.Ok(true, fmt.Sprintf("Received timeout after %s", totalTime))
+			} else if err != nil {
+				qunit.Ok(false, fmt.Sprintf("Unexpected error in read: %s", err))
+			} else {
+				qunit.Ok(false, "Expected timeout in read, got no error")
 			}
 		}()
 

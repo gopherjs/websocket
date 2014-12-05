@@ -2,6 +2,7 @@ package main
 
 import (
 	"go/build"
+	"time"
 
 	"code.google.com/p/go.net/websocket"
 	"github.com/codegangsta/martini"
@@ -28,6 +29,10 @@ func main() {
 		if err := websocket.Message.Send(ws, []byte{0x00, 0x01, 0x02, 0x03, 0x04}); err != nil {
 			panic(err)
 		}
+	}).ServeHTTP)
+
+	m.Get("/ws/wait-30s", websocket.Handler(func(ws *websocket.Conn) {
+		<-time.After(30 * time.Second)
 	}).ServeHTTP)
 
 	m.Run()
