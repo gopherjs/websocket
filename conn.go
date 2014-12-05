@@ -44,6 +44,14 @@ func beginHandlerClose(ch chan error, removeHandlers func()) func(ev js.Object) 
 	}
 }
 
+type deadlineErr struct{}
+
+func (e *deadlineErr) Error() string   { return "i/o timeout: deadline reached" }
+func (e *deadlineErr) Timeout() bool   { return true }
+func (e *deadlineErr) Temporary() bool { return true }
+
+var errDeadlineReached = &deadlineErr{}
+
 // Dial opens a new WebSocket connection. It will block until the connection is
 // established or fails to connect.
 func Dial(url string) (*Conn, error) {
@@ -95,6 +103,8 @@ type Conn struct {
 
 	ch      chan *dom.MessageEvent
 	readBuf *bytes.Reader
+
+	readDeadline time.Time
 }
 
 func (c *Conn) onMessage(event js.Object) {
@@ -123,10 +133,9 @@ func (c *Conn) initialize() {
 	c.AddEventListener("close", false, c.onClose)
 }
 
-// receiveFrame receives one full frame from the WebSocket. It blocks until the
-// frame is received.
-func (c *Conn) receiveFrame() (*dom.MessageEvent, error) {
-	item, ok := <-c.ch
+// handleFrame handles a single frame received from the channel. This is a
+// convenience funciton to dedupe code for the multiple deadline cases.
+func (c *Conn) handleFrame(item *dom.MessageEvent, ok bool) (*dom.MessageEvent, error) {
 	if !ok { // The channel has been closed
 		return nil, io.EOF
 	} else if item == nil {
@@ -134,7 +143,38 @@ func (c *Conn) receiveFrame() (*dom.MessageEvent, error) {
 		close(c.ch)
 		return nil, io.EOF
 	}
+
 	return item, nil
+}
+
+// receiveFrame receives one full frame from the WebSocket. It blocks until the
+// frame is received.
+func (c *Conn) receiveFrame(observeDeadline bool) (*dom.MessageEvent, error) {
+	var deadlineChan <-chan time.Time // Receiving on a nil channel always blocks indefinitely
+
+	if observeDeadline && !c.readDeadline.IsZero() {
+		now := time.Now()
+		if now.After(c.readDeadline) {
+			select {
+			case item, ok := <-c.ch:
+				return c.handleFrame(item, ok)
+			default:
+				return nil, errDeadlineReached
+			}
+		}
+
+		timer := time.NewTimer(c.readDeadline.Sub(now))
+		defer timer.Stop()
+
+		deadlineChan = timer.C
+	}
+
+	select {
+	case item, ok := <-c.ch:
+		return c.handleFrame(item, ok)
+	case <-deadlineChan:
+		return nil, errDeadlineReached
+	}
 }
 
 func getFrameData(obj js.Object) []byte {
@@ -165,7 +205,7 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 		}
 	}
 
-	frame, err := c.receiveFrame()
+	frame, err := c.receiveFrame(true)
 	if err != nil {
 		return 0, err
 	}
@@ -233,20 +273,24 @@ func (c *Conn) RemoteAddr() *Addr {
 	return &Addr{wsURL}
 }
 
-// SetDeadline implements the net.Conn.SetDeadline method.
+// SetDeadline sets the read and write deadlines associated with the connection.
+// It is equivalent to calling both SetReadDeadline and SetWriteDeadline.
+//
+// A zero value for t means that I/O operations will not time out.
 func (c *Conn) SetDeadline(t time.Time) error {
-	// TODO(nightexcessive): Implement
-	panic("not yet implemeneted")
+	c.readDeadline = t
+	return nil
 }
 
-// SetReadDeadline implements the net.Conn.SetReadDeadline method.
+// SetReadDeadline sets the deadline for future Read calls. A zero value for t
+// means Read will not time out.
 func (c *Conn) SetReadDeadline(t time.Time) error {
-	// TODO(nightexcessive): Implement
-	panic("not yet implemeneted")
+	c.readDeadline = t
+	return nil
 }
 
-// SetWriteDeadline implements the net.Conn.SetWriteDeadline method.
+// SetWriteDeadline sets the deadline for future Write calls. Because our writes
+// do not block, this function is a no-op.
 func (c *Conn) SetWriteDeadline(t time.Time) error {
-	// TODO(nightexcessive): Implement
-	panic("not yet implemeneted")
+	return nil
 }
