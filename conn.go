@@ -55,7 +55,7 @@ func Dial(url string) (*Conn, error) {
 		WebSocket: ws,
 		ch:        make(chan *dom.MessageEvent, 1),
 	}
-	conn.Initialize()
+	conn.initialize()
 
 	openCh := make(chan error, 1)
 
@@ -114,7 +114,7 @@ func (c *Conn) onClose(event js.Object) {
 // Initialize adds all of the event handlers necessary for a Conn to function.
 // It should never be called more than once and is already called if you used
 // Dial to create the Conn.
-func (c *Conn) Initialize() {
+func (c *Conn) initialize() {
 	// We need this so that received binary data is in ArrayBufferView format so
 	// that it can easily be read.
 	c.BinaryType = "arraybuffer"
