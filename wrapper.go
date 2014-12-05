@@ -67,6 +67,8 @@ func New(url string) (ws *WebSocket, err error) {
 // WebSocket is a low-level convenience wrapper around the browser's WebSocket
 // object. For more information, see
 // http://dev.w3.org/html5/websockets/#the-websocket-interface
+//
+// For the high-level wrapper, see Conn.
 type WebSocket struct {
 	js.Object
 	util.EventTarget
