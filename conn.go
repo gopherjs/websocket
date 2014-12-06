@@ -52,6 +52,9 @@ func (e *deadlineErr) Temporary() bool { return true }
 
 var errDeadlineReached = &deadlineErr{}
 
+// TODO(nightexcessive): Add a Dial function that allows a deadline to be
+// specified.
+
 // Dial opens a new WebSocket connection. It will block until the connection is
 // established or fails to connect.
 func Dial(url string) (*Conn, error) {
@@ -96,8 +99,10 @@ func Dial(url string) (*Conn, error) {
 	return conn, nil
 }
 
-// Conn is a high-level wrapper around WebSocket. It is intended to
-// provide a net.TCPConn-like interface.
+// Conn is a high-level wrapper around WebSocket. It is intended to satisfy the
+// net.Conn interface.
+//
+// To create a Conn, use Dial. Instantiating Conn without Dial will not work.
 type Conn struct {
 	*WebSocket
 
@@ -121,9 +126,9 @@ func (c *Conn) onClose(event js.Object) {
 	}()
 }
 
-// Initialize adds all of the event handlers necessary for a Conn to function.
-// It should never be called more than once and is already called if you used
-// Dial to create the Conn.
+// initialize adds all of the event handlers necessary for a Conn to function.
+// It should never be called more than once and is already called if Dial was
+// used to create the Conn.
 func (c *Conn) initialize() {
 	// We need this so that received binary data is in ArrayBufferView format so
 	// that it can easily be read.

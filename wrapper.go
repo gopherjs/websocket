@@ -71,6 +71,9 @@ func New(url string) (ws *WebSocket, err error) {
 // For the high-level wrapper, see Conn.
 type WebSocket struct {
 	js.Object
+
+	// Available events:
+	// open, error, close, message
 	util.EventTarget
 
 	URL string `js:"url"`
