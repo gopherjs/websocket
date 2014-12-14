@@ -18,22 +18,22 @@ import (
 )
 
 func main() {
-	master := websocket.New("http://localhost:9001/ws")
-	//master := websocket.NewWithGlobal("SockJS", "http://localhost:9001/ws")
+	ws := websocket.New("http://localhost:9001/ws")
+	//ws := websocket.NewWithGlobal("SockJS", "http://localhost:9001/ws")
 
-	master.OnOpen(func(obj js.Object) {
+	ws.OnOpen(func(obj js.Object) {
 		console.Log("opened", obj)
 	})
 
-	master.OnError(func(obj js.Object) {
+	ws.OnError(func(obj js.Object) {
 		console.Log("error", obj)
 	})
 
-	master.OnClose(func(obj js.Object) {
+	ws.OnClose(func(obj js.Object) {
 		console.Log("closed", obj)
 	})
 
-	master.OnMessage(func(obj js.Object) {
+	ws.OnMessage(func(obj js.Object) {
 		console.Log("message", obj)
 	})
 }
