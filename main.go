@@ -2,8 +2,6 @@ package websocket
 
 import (
 	"errors"
-
-	"honnef.co/go/js/console"
 	"honnef.co/go/js/dom"
 
 	"github.com/gopherjs/gopherjs/js"
@@ -35,7 +33,6 @@ type webSocket struct {
 
 // NewWithGlobal allows for customizing the global variable on the window.
 func NewWithGlobal(global, url string) WebSocket {
-	console.Log("creating a new websocket")
 	object := js.Global.Get(global).New(url)
 	ws := &webSocket{Object: object}
 	return ws
@@ -43,7 +40,6 @@ func NewWithGlobal(global, url string) WebSocket {
 
 // New creates a new websocket.
 func New(url string) WebSocket {
-	console.Log("creating a new websocket", "url")
 	return NewWithGlobal("WebSocket", url)
 }
 
