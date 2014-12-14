@@ -3,8 +3,6 @@ package websocket
 import (
 	"errors"
 
-	"honnef.co/go/js/dom"
-
 	"github.com/gopherjs/gopherjs/js"
 )
 
@@ -17,30 +15,54 @@ const (
 	closed                       // The connection is closed or couldn't be opened.
 )
 
-type WebSocket struct {
+// A WebSocket is anything that implements the websockets interface.
+// http://www.w3.org/TR/websockets/#websocket
+type WebSocket interface {
+	OnOpen(listener func(js.Object))
+	OnError(listener func(js.Object))
+	OnClose(listener func(js.Object))
+	OnMessage(listener func(js.Object))
+	Send(data string) error
+	Close() error
+}
+
+type webSocket struct {
 	js.Object
 }
 
-func New(url string) *WebSocket {
-	object := js.Global.Get("WebSocket").New(url)
-	ws := &WebSocket{Object: object}
+// NewWithGlobal allows for customizing the global variable on the window.
+func NewWithGlobal(global, url string) WebSocket {
+	object := js.Global.Get(global).New(url)
+	ws := &webSocket{Object: object}
 	return ws
 }
 
-func (ws *WebSocket) OnOpen(listener func(js.Object)) {
+// New creates a new websocket.
+func New(url string) WebSocket {
+	return NewWithGlobal("WebSocket", url)
+}
+
+func (ws *webSocket) OnOpen(listener func(js.Object)) {
 	ws.Object.Set("onopen", listener)
 }
 
-func (ws *WebSocket) OnClose(listener func(js.Object)) {
+func (ws *webSocket) OnError(listener func(js.Object)) {
+	ws.Object.Set("onerror", listener)
+}
+
+func (ws *webSocket) OnClose(listener func(js.Object)) {
 	ws.Object.Set("onclose", listener)
 }
 
-func (ws *WebSocket) OnMessage(listener func(messageEvent *dom.MessageEvent)) {
-	wrapper := func(object js.Object) { listener(&dom.MessageEvent{BasicEvent: &dom.BasicEvent{Object: object}}) }
+func (ws *webSocket) OnMessage(listener func(js.Object)) {
+	wrapper := func(obj js.Object) { listener(obj) }
 	ws.Object.Set("onmessage", wrapper)
 }
 
-func (ws *WebSocket) Send(data string) (err error) {
+// Thrown when attempting to send data on a websocket that isn't open.
+var ErrInvalidState = errors.New("invalid state error")
+
+func (ws *webSocket) Send(data string) (err error) {
 	defer func() {
 		e := recover()
 		if e == nil {
@@ -48,7 +70,7 @@ func (ws *WebSocket) Send(data string) (err error) {
 		}
 		if jsErr, ok := e.(*js.Error); ok && jsErr != nil {
 			println(jsErr.Object.Get("name").Str() == "InvalidStateError")
-			err = errors.New("InvalidStateError")
+			err = ErrInvalidState
 		} else {
 			panic(e)
 		}
@@ -57,7 +79,7 @@ func (ws *WebSocket) Send(data string) (err error) {
 	return nil
 }
 
-func (ws *WebSocket) Close() (err error) {
+func (ws *webSocket) Close() (err error) {
 	defer func() {
 		e := recover()
 		if e == nil {
