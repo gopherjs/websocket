@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"errors"
-	"honnef.co/go/js/dom"
 
 	"github.com/gopherjs/gopherjs/js"
 )
@@ -22,7 +21,7 @@ type WebSocket interface {
 	OnOpen(listener func(js.Object))
 	OnError(listener func(js.Object))
 	OnClose(listener func(js.Object))
-	OnMessage(listener func(*dom.MessageEvent))
+	OnMessage(listener func(js.Object))
 	Send(data string) error
 	Close() error
 }
@@ -55,8 +54,8 @@ func (ws *webSocket) OnClose(listener func(js.Object)) {
 	ws.Object.Set("onclose", listener)
 }
 
-func (ws *webSocket) OnMessage(listener func(messageEvent *dom.MessageEvent)) {
-	wrapper := func(object js.Object) { listener(&dom.MessageEvent{BasicEvent: &dom.BasicEvent{Object: object}}) }
+func (ws *webSocket) OnMessage(listener func(js.Object)) {
+	wrapper := func(obj js.Object) { listener(obj) }
 	ws.Object.Set("onmessage", wrapper)
 }
 

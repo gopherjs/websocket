@@ -13,7 +13,7 @@ package main
 
 import (
 	"github.com/gopherjs/gopherjs/js"
-	"github.com/liamcurry/websocket"
+	"github.com/gopherjs/websocket"
 	"honnef.co/go/js/console"
 )
 
@@ -33,8 +33,8 @@ func main() {
 		console.Log("closed", obj)
 	})
 
-	master.OnMessage(func(e *dom.MessageEvent) {
-		console.Log("message", e)
+	master.OnMessage(func(obj js.Object) {
+		console.Log("message", obj)
 	})
 }
 ```
