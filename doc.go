@@ -1,5 +1,5 @@
 // Package websocket provides high- and low-level bindings for the browser's
-// WebSocket.
+// WebSocket API.
 //
 // The high-level bindings act like a regular net.Conn. They can be used as
 // such. For example:
