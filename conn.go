@@ -278,7 +278,7 @@ func (c *Conn) RemoteAddr() net.Addr {
 		// TODO(nightexcessive): Should we be panicking for this?
 		panic(err)
 	}
-	return &Addr{wsURL}
+	return &addr{wsURL}
 }
 
 // SetDeadline sets the read and write deadlines associated with the connection.
