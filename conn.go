@@ -193,7 +193,7 @@ func getFrameData(obj js.Object) []byte {
 		return int8Array.Interface().([]byte)
 	}
 
-	return []byte(obj.Str())
+	return []byte(obj.String())
 }
 
 func (c *Conn) Read(b []byte) (n int, err error) {
