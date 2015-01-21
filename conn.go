@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"time"
 
@@ -261,7 +262,7 @@ func (c *Conn) WriteString(s string) (n int, err error) {
 // LocalAddr would typically return the local network address, but due to
 // limitations in the JavaScript API, it is unable to. Calling this method will
 // cause a panic.
-func (c *Conn) LocalAddr() *Addr {
+func (c *Conn) LocalAddr() net.Addr {
 	// BUG(nightexcessive): Conn.LocalAddr() panics because the underlying
 	// JavaScript API has no way of figuring out the local address.
 
@@ -271,13 +272,13 @@ func (c *Conn) LocalAddr() *Addr {
 
 // RemoteAddr returns the remote network address, based on
 // websocket.WebSocket.URL.
-func (c *Conn) RemoteAddr() *Addr {
+func (c *Conn) RemoteAddr() net.Addr {
 	wsURL, err := url.Parse(c.URL)
 	if err != nil {
 		// TODO(nightexcessive): Should we be panicking for this?
 		panic(err)
 	}
-	return &Addr{wsURL}
+	return &addr{wsURL}
 }
 
 // SetDeadline sets the read and write deadlines associated with the connection.
