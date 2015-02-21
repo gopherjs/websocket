@@ -16,8 +16,8 @@ import (
 	"honnef.co/go/js/dom"
 )
 
-func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev js.Object) {
-	return func(ev js.Object) {
+func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev *js.Object) {
+	return func(ev *js.Object) {
 		removeHandlers()
 		close(ch)
 	}
@@ -38,8 +38,8 @@ func (e *closeError) Error() string {
 	return fmt.Sprintf("CloseEvent: (%s) (%d) %s", cleanStmt, e.Code, e.Reason)
 }
 
-func beginHandlerClose(ch chan error, removeHandlers func()) func(ev js.Object) {
-	return func(ev js.Object) {
+func beginHandlerClose(ch chan error, removeHandlers func()) func(ev *js.Object) {
+	return func(ev *js.Object) {
 		removeHandlers()
 		go func() {
 			ce := dom.WrapEvent(ev).(*dom.CloseEvent)
@@ -76,8 +76,8 @@ func Dial(url string) (*Conn, error) {
 	openCh := make(chan error, 1)
 
 	var (
-		openHandler  func(ev js.Object)
-		closeHandler func(ev js.Object)
+		openHandler  func(ev *js.Object)
+		closeHandler func(ev *js.Object)
 	)
 
 	// Handlers need to be removed to prevent a panic when the WebSocket closes
@@ -117,13 +117,13 @@ type Conn struct {
 	readDeadline time.Time
 }
 
-func (c *Conn) onMessage(event js.Object) {
+func (c *Conn) onMessage(event *js.Object) {
 	go func() {
 		c.ch <- dom.WrapEvent(event).(*dom.MessageEvent)
 	}()
 }
 
-func (c *Conn) onClose(event js.Object) {
+func (c *Conn) onClose(event *js.Object) {
 	go func() {
 		// We queue nil to the end so that any messages received prior to
 		// closing get handled first.
@@ -187,7 +187,7 @@ func (c *Conn) receiveFrame(observeDeadline bool) (*dom.MessageEvent, error) {
 	}
 }
 
-func getFrameData(obj js.Object) []byte {
+func getFrameData(obj *js.Object) []byte {
 	// Check if it's an array buffer. If so, convert it to a Go byte slice.
 	if constructor := obj.Get("constructor"); constructor == js.Global.Get("ArrayBuffer") {
 		int8Array := js.Global.Get("Uint8Array").New(obj)

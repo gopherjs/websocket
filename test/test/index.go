@@ -52,11 +52,11 @@ func main() {
 			return nil
 		}
 
-		ws.AddEventListener("open", false, func(ev js.Object) {
+		ws.AddEventListener("open", false, func(ev *js.Object) {
 			qunit.Ok(true, "WebSocket opened")
 		})
 
-		ws.AddEventListener("close", false, func(ev js.Object) {
+		ws.AddEventListener("close", false, func(ev *js.Object) {
 			const (
 				CloseNormal            = 1000
 				CloseNoReasonSpecified = 1005 // IE10 hates it when the server closes without sending a close reason

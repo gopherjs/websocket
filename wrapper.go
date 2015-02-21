@@ -74,7 +74,7 @@ func New(url string) (ws *WebSocket, err error) {
 //
 // For the high-level wrapper, see Conn.
 type WebSocket struct {
-	js.Object
+	*js.Object
 
 	// Available events:
 	// open, error, close, message
@@ -98,7 +98,7 @@ type WebSocket struct {
 // thrown error doesn't seem to be caught by recover.
 
 // Send sends a message on the WebSocket. The data argument can be a string or a
-// js.Object fulfilling the ArrayBufferView definition.
+// *js.Object fulfilling the ArrayBufferView definition.
 //
 // See: http://dev.w3.org/html5/websockets/#dom-websocket-send
 func (ws *WebSocket) Send(data interface{}) (err error) {
