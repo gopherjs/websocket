@@ -1,39 +1,37 @@
 package main
 
 import (
-	"go/build"
+	"net/http"
 	"time"
 
-	"code.google.com/p/go.net/websocket"
-	"github.com/codegangsta/martini"
+	"golang.org/x/net/websocket"
 )
 
 func main() {
-	m := martini.Classic()
+	// Serve test folder.
+	http.Handle("/", http.FileServer(http.Dir("./test/")))
 
-	//serve test folder
-	m.Use(martini.Static("test"))
-
-	//serve sourcemaps from GOROOT and GOPATH
-	m.Use(martini.Static(build.Default.GOROOT, martini.StaticOptions{Prefix: "goroot"}))
-	m.Use(martini.Static(build.Default.GOPATH, martini.StaticOptions{Prefix: "gopath"}))
-
-	m.Get("/ws/immediate-close", websocket.Handler(func(ws *websocket.Conn) {
+	http.Handle("/ws/immediate-close", websocket.Handler(func(ws *websocket.Conn) {
 		// Cleanly close the connection.
-		if err := ws.Close(); err != nil {
+		err := ws.Close()
+		if err != nil {
 			panic(err)
 		}
-	}).ServeHTTP)
+	}))
 
-	m.Get("/ws/binary-static", websocket.Handler(func(ws *websocket.Conn) {
-		if err := websocket.Message.Send(ws, []byte{0x00, 0x01, 0x02, 0x03, 0x04}); err != nil {
+	http.Handle("/ws/binary-static", websocket.Handler(func(ws *websocket.Conn) {
+		err := websocket.Message.Send(ws, []byte{0x00, 0x01, 0x02, 0x03, 0x04})
+		if err != nil {
 			panic(err)
 		}
-	}).ServeHTTP)
+	}))
 
-	m.Get("/ws/wait-30s", websocket.Handler(func(ws *websocket.Conn) {
+	http.Handle("/ws/wait-30s", websocket.Handler(func(ws *websocket.Conn) {
 		<-time.After(30 * time.Second)
-	}).ServeHTTP)
+	}))
 
-	m.Run()
+	err := http.ListenAndServe(":3000", nil)
+	if err != nil {
+		panic(err)
+	}
 }
