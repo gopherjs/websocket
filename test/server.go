@@ -4,8 +4,8 @@ import (
 	"go/build"
 	"time"
 
-	"code.google.com/p/go.net/websocket"
 	"github.com/codegangsta/martini"
+	"golang.org/x/net/websocket"
 )
 
 func main() {
