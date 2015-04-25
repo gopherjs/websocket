@@ -111,6 +111,7 @@ func Dial(url string) (*Conn, error) {
 		ch:        make(chan *dom.MessageEvent, 1),
 	}
 	conn.initialize()
+	conn.Reader, conn.pw = io.Pipe()
 
 	openCh := make(chan error, 1)
 
@@ -140,6 +141,8 @@ func Dial(url string) (*Conn, error) {
 		return nil, err
 	}
 
+	go conn.receiveLoop()
+
 	return conn, nil
 }
 
@@ -154,6 +157,10 @@ type Conn struct {
 	readBuf *bytes.Reader
 
 	readDeadline time.Time
+
+	io.Reader
+	pw       *io.PipeWriter
+	closeErr *closeError
 }
 
 func (c *Conn) onMessage(event *js.Object) {
@@ -165,8 +172,8 @@ func (c *Conn) onMessage(event *js.Object) {
 func (c *Conn) onClose(event *js.Object) {
 	go func() {
 		if ce, ok := dom.WrapEvent(event).(*dom.CloseEvent); ok {
-			err := &closeError{CloseEvent: ce}
-			console.Error(err.Error())
+			c.closeErr = &closeError{CloseEvent: ce}
+			console.Error(c.closeErr.Error())
 		}
 
 		// We queue nil to the end so that any messages received prior to
@@ -191,7 +198,11 @@ func (c *Conn) initialize() {
 // convenience funciton to dedupe code for the multiple deadline cases.
 func (c *Conn) handleFrame(item *dom.MessageEvent, ok bool) (*dom.MessageEvent, error) {
 	if !ok { // The channel has been closed
-		return nil, io.EOF
+		if c.closeErr == nil {
+			return nil, io.EOF
+
+		}
+		return nil, c.closeErr
 	} else if item == nil {
 		// See onClose for the explanation about sending a nil item.
 		close(c.ch)
@@ -199,6 +210,31 @@ func (c *Conn) handleFrame(item *dom.MessageEvent, ok bool) (*dom.MessageEvent, 
 	}
 
 	return item, nil
+}
+
+// receiveLoop fill's the writer end of the Conn's io.Pipe with data frames
+// runs in its own goroutine
+func (c *Conn) receiveLoop() {
+
+	for {
+		frame, err := c.receiveFrame(true)
+		if err != nil {
+			if err2 := c.pw.CloseWithError(err); err2 != nil {
+				console.Error("CloseWithError failed", err2)
+			}
+			return
+		}
+
+		receivedBytes := getFrameData(frame.Data)
+
+		_, err = io.Copy(c.pw, bytes.NewReader(receivedBytes))
+		if err != nil {
+			if err2 := c.pw.CloseWithError(err); err2 != nil {
+				console.Error("CloseWithError failed", err2)
+			}
+			return
+		}
+	}
 }
 
 // receiveFrame receives one full frame from the WebSocket. It blocks until the
@@ -241,41 +277,11 @@ func getFrameData(obj *js.Object) []byte {
 	return []byte(obj.String())
 }
 
-func (c *Conn) Read(b []byte) (n int, err error) {
-	if c.readBuf != nil {
-		n, err = c.readBuf.Read(b)
-		if err == io.EOF {
-			c.readBuf = nil
-			err = nil
-		}
-		// If we read nothing from the buffer, continue to trying to receive.
-		// This saves us when the last Read call emptied the buffer and this
-		// call triggers the EOF. There's probably a better way of doing this,
-		// but I'm really tired.
-		if n > 0 {
-			return
-		}
-	}
-
-	frame, err := c.receiveFrame(true)
-	if err != nil {
-		return 0, err
-	}
-
-	receivedBytes := getFrameData(frame.Data)
-
-	n = copy(b, receivedBytes)
-	// Fast path: The entire frame's contents have been copied into b.
-	if n >= len(receivedBytes) {
-		return
-	}
-
-	c.readBuf = bytes.NewReader(receivedBytes[n:])
-	return
-}
-
 // Write writes the contents of b to the WebSocket using a binary opcode.
 func (c *Conn) Write(b []byte) (n int, err error) {
+	if c.closeErr != nil {
+		return 0, c.closeErr
+	}
 	// []byte is converted to an (U)Int8Array by GopherJS, which fullfils the
 	// ArrayBufferView definition.
 	err = c.Send(b)
