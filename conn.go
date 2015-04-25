@@ -60,7 +60,6 @@ func (e *closeError) Error() string {
 		cleanStmt = "unclean"
 
 		if e.Reason != "" {
-			console.Warn("original Reason:", e.Reason)
 			reason = e.Reason
 		} else {
 			reason, ok = closeErrorMap[e.Code]
@@ -165,8 +164,6 @@ func (c *Conn) onMessage(event *js.Object) {
 
 func (c *Conn) onClose(event *js.Object) {
 	go func() {
-		console.Warn("close event captured")
-		console.Dir(event)
 		if ce, ok := dom.WrapEvent(event).(*dom.CloseEvent); ok {
 			err := &closeError{CloseEvent: ce}
 			console.Error(err.Error())
