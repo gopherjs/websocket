@@ -66,10 +66,6 @@ func (e *closeError) Error() string {
 			if !ok {
 				reason = "Unknown reason"
 			}
-
-			if e.Code == 1010 {
-				reason += "\nSpecifically, the extensions that are needed are: " + e.Reason
-			}
 		}
 
 	}
