@@ -27,7 +27,7 @@ The low-level bindings use the typical JavaScript idioms.
 ws, err := websocket.New("ws://localhost/socket") // Does not block.
 if err != nil { handleError() }
 
-onOpen := func(ev js.Object) {
+onOpen := func(ev *js.Object) {
     err := ws.Send([]byte("Hello!")) // Send as a binary frame
     err := ws.Send("Hello!") // Send a text frame
 }
