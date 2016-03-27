@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gopherjs/gopherjs/js"
-	"honnef.co/go/js/dom"
 )
 
 func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev *js.Object) {
@@ -25,7 +24,10 @@ func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev *js.Object) 
 
 // closeError allows a CloseEvent to be used as an error.
 type closeError struct {
-	*dom.CloseEvent
+	*js.Object
+	Code     int    `js:"code"`
+	Reason   string `js:"reason"`
+	WasClean bool   `js:"wasClean"`
 }
 
 func (e *closeError) Error() string {
@@ -42,8 +44,7 @@ func beginHandlerClose(ch chan error, removeHandlers func()) func(ev *js.Object)
 	return func(ev *js.Object) {
 		removeHandlers()
 		go func() {
-			ce := dom.WrapEvent(ev).(*dom.CloseEvent)
-			ch <- &closeError{CloseEvent: ce}
+			ch <- &closeError{Object: ev}
 			close(ch)
 		}()
 	}
@@ -69,7 +70,7 @@ func Dial(url string) (*Conn, error) {
 	}
 	conn := &Conn{
 		WebSocket: ws,
-		ch:        make(chan *dom.MessageEvent, 1),
+		ch:        make(chan *messageEvent, 1),
 	}
 	conn.initialize()
 
@@ -111,15 +112,20 @@ func Dial(url string) (*Conn, error) {
 type Conn struct {
 	*WebSocket
 
-	ch      chan *dom.MessageEvent
+	ch      chan *messageEvent
 	readBuf *bytes.Reader
 
 	readDeadline time.Time
 }
 
+type messageEvent struct {
+	*js.Object
+	Data *js.Object `js:"data"`
+}
+
 func (c *Conn) onMessage(event *js.Object) {
 	go func() {
-		c.ch <- dom.WrapEvent(event).(*dom.MessageEvent)
+		c.ch <- &messageEvent{Object: event}
 	}()
 }
 
@@ -145,21 +151,21 @@ func (c *Conn) initialize() {
 
 // handleFrame handles a single frame received from the channel. This is a
 // convenience funciton to dedupe code for the multiple deadline cases.
-func (c *Conn) handleFrame(item *dom.MessageEvent, ok bool) (*dom.MessageEvent, error) {
+func (c *Conn) handleFrame(message *messageEvent, ok bool) (*messageEvent, error) {
 	if !ok { // The channel has been closed
 		return nil, io.EOF
-	} else if item == nil {
+	} else if message == nil {
 		// See onClose for the explanation about sending a nil item.
 		close(c.ch)
 		return nil, io.EOF
 	}
 
-	return item, nil
+	return message, nil
 }
 
 // receiveFrame receives one full frame from the WebSocket. It blocks until the
 // frame is received.
-func (c *Conn) receiveFrame(observeDeadline bool) (*dom.MessageEvent, error) {
+func (c *Conn) receiveFrame(observeDeadline bool) (*messageEvent, error) {
 	var deadlineChan <-chan time.Time // Receiving on a nil channel always blocks indefinitely
 
 	if observeDeadline && !c.readDeadline.IsZero() {

@@ -6,7 +6,6 @@ package websocket
 
 import (
 	"github.com/gopherjs/gopherjs/js"
-	"honnef.co/go/js/util"
 )
 
 // ReadyState represents the state that a WebSocket is in. For more information
@@ -61,8 +60,7 @@ func New(url string) (ws *WebSocket, err error) {
 	object := js.Global.Get("WebSocket").New(url)
 
 	ws = &WebSocket{
-		Object:      object,
-		EventTarget: util.EventTarget{Object: object},
+		Object: object,
 	}
 
 	return
@@ -76,10 +74,6 @@ func New(url string) (ws *WebSocket, err error) {
 type WebSocket struct {
 	*js.Object
 
-	// Available events:
-	// open, error, close, message
-	util.EventTarget
-
 	URL string `js:"url"`
 
 	// ready state
@@ -92,6 +86,18 @@ type WebSocket struct {
 
 	// messaging
 	BinaryType string `js:"binaryType"`
+}
+
+// AddEventListener provides the ability to bind callback
+// functions to the following available events:
+// open, error, close, message
+func (ws *WebSocket) AddEventListener(typ string, useCapture bool, listener func(*js.Object)) {
+	ws.Call("addEventListener", typ, listener, useCapture)
+}
+
+// RemoveEventListener removes a previously bound callback function
+func (ws *WebSocket) RemoveEventListener(typ string, useCapture bool, listener func(*js.Object)) {
+	ws.Call("removeEventListener", typ, listener, useCapture)
 }
 
 // BUG(nightexcessive): When WebSocket.Send is called on a closed WebSocket, the

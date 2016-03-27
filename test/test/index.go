@@ -11,19 +11,18 @@ import (
 	"github.com/gopherjs/gopherjs/js"
 	"github.com/gopherjs/websocket"
 	"github.com/rusco/qunit"
-	"honnef.co/go/js/dom"
 )
 
 func getWSBaseURL() string {
-	document := dom.GetWindow().Document().(dom.HTMLDocument)
-	location := document.Location()
+	document := js.Global.Get("window").Get("document")
+	location := document.Get("location")
 
 	wsProtocol := "ws"
-	if location.Protocol == "https:" {
+	if location.Get("protocol").String() == "https:" {
 		wsProtocol = "wss"
 	}
 
-	return fmt.Sprintf("%s://%s:%s/ws/", wsProtocol, location.Hostname, location.Port)
+	return fmt.Sprintf("%s://%s:%s/ws/", wsProtocol, location.Get("hostname"), location.Get("port"))
 }
 
 func main() {
@@ -61,9 +60,11 @@ func main() {
 				CloseNormal            = 1000
 				CloseNoReasonSpecified = 1005 // IE10 hates it when the server closes without sending a close reason
 			)
-			closeEvent := dom.WrapEvent(ev).(*dom.CloseEvent)
-			if closeEvent.Code != CloseNormal && closeEvent.Code != CloseNoReasonSpecified {
-				qunit.Ok(false, fmt.Sprintf("WebSocket close was not clean (code %d)", closeEvent.Code))
+
+			closeEventCode := ev.Get("code").Int()
+
+			if closeEventCode != CloseNormal && closeEventCode != CloseNoReasonSpecified {
+				qunit.Ok(false, fmt.Sprintf("WebSocket close was not clean (code %d)", closeEventCode))
 				qunit.Start()
 				return
 			}
