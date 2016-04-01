@@ -193,10 +193,9 @@ func (c *conn) receiveFrame(observeDeadline bool) (*messageEvent, error) {
 func getFrameData(obj *js.Object) []byte {
 	// Check if it's an array buffer. If so, convert it to a Go byte slice.
 	if constructor := obj.Get("constructor"); constructor == js.Global.Get("ArrayBuffer") {
-		int8Array := js.Global.Get("Uint8Array").New(obj)
-		return int8Array.Interface().([]byte)
+		uint8Array := js.Global.Get("Uint8Array").New(obj)
+		return uint8Array.Interface().([]byte)
 	}
-
 	return []byte(obj.String())
 }
 
@@ -235,14 +234,13 @@ func (c *conn) Read(b []byte) (n int, err error) {
 
 // Write writes the contents of b to the WebSocket using a binary opcode.
 func (c *conn) Write(b []byte) (n int, err error) {
-	// []byte is converted to an (U)Int8Array by GopherJS, which fullfils the
+	// []byte is converted to an Uint8Array by GopherJS, which fullfils the
 	// ArrayBufferView definition.
 	err = c.Send(b)
 	if err != nil {
-		return
+		return 0, err
 	}
-	n = len(b)
-	return
+	return len(b), nil
 }
 
 // LocalAddr would typically return the local network address, but due to
