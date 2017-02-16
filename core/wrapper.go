@@ -4,9 +4,7 @@
 
 package websocket
 
-import (
-	"github.com/gopherjs/gopherjs/js"
-)
+import "github.com/gopherjs/gopherjs/js"
 
 // ReadyState represents the state that a WebSocket is in. For more information
 // about the available states, see
