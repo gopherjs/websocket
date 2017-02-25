@@ -6,7 +6,7 @@
 
 package websocket
 
-import core "github.com/gopherjs/websocket/core"
+import "github.com/gopherjs/websocket/core"
 
 // ReadyState is the top level export of gopherjs/websocket/core's object
 type ReadyState core.ReadyState

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gopherjs/gopherjs/js"
-	core "github.com/gopherjs/websocket/core"
+	"github.com/gopherjs/websocket/core"
 )
 
 func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev *js.Object) {
