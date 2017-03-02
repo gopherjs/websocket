@@ -21,9 +21,9 @@ The high-level bindings act like a regular net.Conn. They can be used as such. F
 	err = c.Close()
 	if err != nil { panic(err) }
 
-The low-level bindings use the typical JavaScript idioms.
+There are low-level bindings that use the typical JavaScript idioms available in package websocketjs.
 
-	ws, err := websocket.New("ws://localhost/socket") // Does not block.
+	ws, err := websocketjs.New("ws://localhost/socket") // Does not block.
 	if err != nil { panic(err) }
 
 	onOpen := func(ev *js.Object) {
