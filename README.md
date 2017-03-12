@@ -4,7 +4,7 @@ websocket
 Packages websocket and websocketjs provide high- and low-level bindings for the browser's WebSocket API (respectively).
 
 The high-level bindings offer a Dial function that returns a regular net.Conn.
-It can be used similar to net package.
+It can be used similarly to net package.
 
 ```Go
 conn, err := websocket.Dial("ws://localhost/socket") // Blocks until connection is established.

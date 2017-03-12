@@ -6,7 +6,7 @@
 Package websocket provides high-level bindings for the browser's WebSocket API.
 
 These bindings offer a Dial function that returns a regular net.Conn.
-It can be used similar to net package.
+It can be used similarly to net package.
 
 	conn, err := websocket.Dial("ws://localhost/socket") // Blocks until connection is established.
 	if err != nil {
