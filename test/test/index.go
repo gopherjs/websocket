@@ -10,6 +10,7 @@ import (
 
 	"github.com/gopherjs/gopherjs/js"
 	"github.com/gopherjs/websocket"
+	"github.com/gopherjs/websocket/websocketjs"
 	"github.com/rusco/qunit"
 )
 
@@ -28,11 +29,11 @@ func getWSBaseURL() string {
 func main() {
 	wsBaseURL := getWSBaseURL()
 
-	qunit.Module("websocket.WebSocket")
+	qunit.Module("websocketjs.WebSocket")
 	qunit.Test("Invalid URL", func(assert qunit.QUnitAssert) {
 		qunit.Expect(1)
 
-		ws, err := websocket.New("blah://blah.example/invalid")
+		ws, err := websocketjs.New("blah://blah.example/invalid")
 		if err == nil {
 			ws.Close()
 			assert.Ok(false, "Got no error, but expected an invalid URL error")
@@ -44,7 +45,7 @@ func main() {
 	qunit.AsyncTest("Immediate close", func() interface{} {
 		qunit.Expect(2)
 
-		ws, err := websocket.New(wsBaseURL + "immediate-close")
+		ws, err := websocketjs.New(wsBaseURL + "immediate-close")
 		if err != nil {
 			qunit.Ok(false, fmt.Sprintf("Error opening WebSocket: %s", err))
 			qunit.Start()
