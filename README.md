@@ -3,33 +3,42 @@ websocket
 
 Packages websocket and websocketjs provide high- and low-level bindings for the browser's WebSocket API (respectively).
 
-The high-level bindings act like a regular `net.Conn`. They can be used as such. For example:
+The high-level bindings offer a Dial function that returns a regular net.Conn.
+It can be used similar to net package.
 
 ```Go
-c, err := websocket.Dial("ws://localhost/socket") // Blocks until connection is established
-if err != nil { ... }
+conn, err := websocket.Dial("ws://localhost/socket") // Blocks until connection is established.
+if err != nil {
+	// handle error
+}
 
 buf := make([]byte, 1024)
-n, err = c.Read(buf) // Blocks until a WebSocket frame is received
-if err != nil { ... }
+n, err = conn.Read(buf) // Blocks until a WebSocket frame is received.
 doSomethingWithData(buf[:n])
+if err != nil {
+	// handle error
+}
 
-_, err = c.Write([]byte("Hello!"))
-if err != nil { ... }
+_, err = conn.Write([]byte("Hello!"))
+// ...
 
-err = c.Close()
-if err != nil { ... }
+err = conn.Close()
+// ...
 ```
 
-The low-level bindings use the typical JavaScript idioms.
+The low-level bindings work with typical JavaScript idioms, such as adding event listeners with callbacks.
 
 ```Go
 ws, err := websocketjs.New("ws://localhost/socket") // Does not block.
-if err != nil { ... }
+if err != nil {
+	// handle error
+}
 
 onOpen := func(ev *js.Object) {
-	err := ws.Send([]byte("Hello!")) // Send as a binary frame
-	err := ws.Send("Hello!")         // Send a text frame
+	err := ws.Send([]byte("Hello!")) // Send a binary frame.
+	// ...
+	err := ws.Send("Hello!") // Send a text frame.
+	// ...
 }
 
 ws.AddEventListener("open", false, onOpen)
@@ -38,5 +47,5 @@ ws.AddEventListener("close", false, onClose)
 ws.AddEventListener("error", false, onError)
 
 err = ws.Close()
-if err != nil { ... }
+// ...
 ```

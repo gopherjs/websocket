@@ -5,15 +5,19 @@
 /*
 Package websocketjs provides low-level bindings for the browser's WebSocket API.
 
-These bindings allow for using typical JavaScript idioms,
-such as adding event listeners with callbacks. For example:
+These bindings work with typical JavaScript idioms,
+such as adding event listeners with callbacks.
 
 	ws, err := websocketjs.New("ws://localhost/socket") // Does not block.
-	if err != nil { ... }
+	if err != nil {
+		// handle error
+	}
 
 	onOpen := func(ev *js.Object) {
 		err := ws.Send([]byte("Hello!")) // Send a binary frame.
-		err := ws.Send("Hello!")         // Send a text frame.
+		// ...
+		err := ws.Send("Hello!") // Send a text frame.
+		// ...
 	}
 
 	ws.AddEventListener("open", false, onOpen)
@@ -22,7 +26,7 @@ such as adding event listeners with callbacks. For example:
 	ws.AddEventListener("error", false, onError)
 
 	err = ws.Close()
-	if err != nil { ... }
+	// ...
 */
 package websocketjs
 
@@ -89,8 +93,6 @@ func New(url string) (ws *WebSocket, err error) {
 // WebSocket is a low-level convenience wrapper around the browser's WebSocket
 // object. For more information, see
 // http://dev.w3.org/html5/websockets/#the-websocket-interface
-//
-// For the high-level wrapper, see Conn.
 type WebSocket struct {
 	*js.Object
 

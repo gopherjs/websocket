@@ -6,20 +6,24 @@
 Package websocket provides high-level bindings for the browser's WebSocket API.
 
 These bindings offer a Dial function that returns a regular net.Conn.
-They can be used similar to net package. For example:
+It can be used similar to net package.
 
-	c, err := websocket.Dial("ws://localhost/socket") // Blocks until connection is established
-	if err != nil { ... }
+	conn, err := websocket.Dial("ws://localhost/socket") // Blocks until connection is established.
+	if err != nil {
+		// handle error
+	}
 
 	buf := make([]byte, 1024)
-	n, err = c.Read(buf) // Blocks until a WebSocket frame is received
-	if err != nil { ... }
+	n, err = conn.Read(buf) // Blocks until a WebSocket frame is received.
 	doSomethingWithData(buf[:n])
+	if err != nil {
+		// handle error
+	}
 
-	_, err = c.Write([]byte("Hello!"))
-	if err != nil { ... }
+	_, err = conn.Write([]byte("Hello!"))
+	// ...
 
-	err = c.Close()
-	if err != nil { ... }
+	err = conn.Close()
+	// ...
 */
 package websocket
