@@ -6,7 +6,6 @@ package websocket
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net"
 	"net/url"
@@ -38,7 +37,7 @@ func (e *closeError) Error() string {
 	} else {
 		cleanStmt = "unclean"
 	}
-	return fmt.Sprintf("CloseEvent: (%s) (%d) %s", cleanStmt, e.Code, e.Reason)
+	return "CloseEvent: (" + cleanStmt + ") (" + strconv.Itoa(e.Code) + ") " + e.Reason
 }
 
 func beginHandlerClose(ch chan error, removeHandlers func()) func(ev *js.Object) {
