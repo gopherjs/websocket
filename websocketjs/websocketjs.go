@@ -2,11 +2,35 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-package websocket
+/*
+Package websocketjs provides low-level bindings for the browser's WebSocket API.
 
-import (
-	"github.com/gopherjs/gopherjs/js"
-)
+These bindings work with typical JavaScript idioms,
+such as adding event listeners with callbacks.
+
+	ws, err := websocketjs.New("ws://localhost/socket") // Does not block.
+	if err != nil {
+		// handle error
+	}
+
+	onOpen := func(ev *js.Object) {
+		err := ws.Send([]byte("Hello!")) // Send a binary frame.
+		// ...
+		err := ws.Send("Hello!") // Send a text frame.
+		// ...
+	}
+
+	ws.AddEventListener("open", false, onOpen)
+	ws.AddEventListener("message", false, onMessage)
+	ws.AddEventListener("close", false, onClose)
+	ws.AddEventListener("error", false, onError)
+
+	err = ws.Close()
+	// ...
+*/
+package websocketjs
+
+import "github.com/gopherjs/gopherjs/js"
 
 // ReadyState represents the state that a WebSocket is in. For more information
 // about the available states, see
@@ -69,8 +93,6 @@ func New(url string) (ws *WebSocket, err error) {
 // WebSocket is a low-level convenience wrapper around the browser's WebSocket
 // object. For more information, see
 // http://dev.w3.org/html5/websockets/#the-websocket-interface
-//
-// For the high-level wrapper, see Conn.
 type WebSocket struct {
 	*js.Object
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gopherjs/gopherjs/js"
+	"github.com/gopherjs/websocket/websocketjs"
 )
 
 func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev *js.Object) {
@@ -64,7 +65,7 @@ var errDeadlineReached = &deadlineErr{}
 // Dial opens a new WebSocket connection. It will block until the connection is
 // established or fails to connect.
 func Dial(url string) (net.Conn, error) {
-	ws, err := New(url)
+	ws, err := websocketjs.New(url)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,7 @@ func Dial(url string) (net.Conn, error) {
 
 // conn is a high-level wrapper around WebSocket. It implements net.Conn interface.
 type conn struct {
-	*WebSocket
+	*websocketjs.WebSocket
 
 	ch      chan *messageEvent
 	readBuf *bytes.Reader

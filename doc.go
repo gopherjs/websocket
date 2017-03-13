@@ -3,40 +3,27 @@
 // in the LICENSE file.
 
 /*
-Package websocket provides high- and low-level bindings for the browser's WebSocket API.
+Package websocket provides high-level bindings for the browser's WebSocket API.
 
-The high-level bindings act like a regular net.Conn. They can be used as such. For example:
+These bindings offer a Dial function that returns a regular net.Conn.
+It can be used similarly to net package.
 
-	c, err := websocket.Dial("ws://localhost/socket") // Blocks until connection is established
-	if err != nil { panic(err) }
-
-	buf := make([]byte, 1024)
-	n, err = c.Read(buf) // Blocks until a WebSocket frame is received
-	if err != nil { panic(err) }
-	doSomethingWithData(buf[:n])
-
-	_, err = c.Write([]byte("Hello!"))
-	if err != nil { panic(err) }
-
-	err = c.Close()
-	if err != nil { panic(err) }
-
-The low-level bindings use the typical JavaScript idioms.
-
-	ws, err := websocket.New("ws://localhost/socket") // Does not block.
-	if err != nil { panic(err) }
-
-	onOpen := func(ev *js.Object) {
-		err := ws.Send([]byte("Hello!")) // Send as a binary frame
-		err := ws.Send("Hello!")         // Send a text frame
+	conn, err := websocket.Dial("ws://localhost/socket") // Blocks until connection is established.
+	if err != nil {
+		// handle error
 	}
 
-	ws.AddEventListener("open", false, onOpen)
-	ws.AddEventListener("message", false, onMessage)
-	ws.AddEventListener("close", false, onClose)
-	ws.AddEventListener("error", false, onError)
+	buf := make([]byte, 1024)
+	n, err = conn.Read(buf) // Blocks until a WebSocket frame is received.
+	doSomethingWithData(buf[:n])
+	if err != nil {
+		// handle error
+	}
 
-	err = ws.Close()
-	if err != nil { panic(err) }
+	_, err = conn.Write([]byte("Hello!"))
+	// ...
+
+	err = conn.Close()
+	// ...
 */
 package websocket
