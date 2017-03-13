@@ -1,7 +1,9 @@
 websocket
 =========
 
-Packages websocket and websocketjs provide high- and low-level bindings for the browser's WebSocket API (respectively).
+[![GoDoc](https://godoc.org/github.com/gopherjs/websocket?status.svg)](https://godoc.org/github.com/gopherjs/websocket)
+
+Packages [websocket](https://godoc.org/github.com/gopherjs/websocket) and [websocketjs](https://godoc.org/github.com/gopherjs/websocket/websocketjs) provide high- and low-level bindings for the browser's WebSocket API (respectively).
 
 The high-level bindings offer a Dial function that returns a regular net.Conn.
 It can be used similarly to net package.
