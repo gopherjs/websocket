@@ -160,6 +160,17 @@ func (ws *WebSocket) Close() (err error) {
 			panic(e)
 		}
 	}()
-	ws.Object.Call("close")
+
+	// Use close code closeNormalClosure to indicate that the purpose
+	// for which the connection was established has been fulfilled.
+	// See https://tools.ietf.org/html/rfc6455#section-7.4.
+	ws.Object.Call("close", closeNormalClosure)
 	return
 }
+
+// Close codes defined in RFC 6455, section 11.7.
+const (
+	// 1000 indicates a normal closure, meaning that the purpose for
+	// which the connection was established has been fulfilled.
+	closeNormalClosure = 1000
+)

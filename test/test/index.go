@@ -58,13 +58,13 @@ func main() {
 
 		ws.AddEventListener("close", false, func(ev *js.Object) {
 			const (
-				CloseNormal            = 1000
-				CloseNoReasonSpecified = 1005 // IE10 hates it when the server closes without sending a close reason
+				CloseNormalClosure    = 1000
+				CloseNoStatusReceived = 1005 // IE10 hates it when the server closes without sending a close reason
 			)
 
 			closeEventCode := ev.Get("code").Int()
 
-			if closeEventCode != CloseNormal && closeEventCode != CloseNoReasonSpecified {
+			if closeEventCode != CloseNormalClosure && closeEventCode != CloseNoStatusReceived {
 				qunit.Ok(false, fmt.Sprintf("WebSocket close was not clean (code %d)", closeEventCode))
 				qunit.Start()
 				return
