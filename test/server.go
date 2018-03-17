@@ -2,10 +2,22 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/net/websocket"
 )
+
+func negotiateProtocol(offered []string, supported []string) []string {
+	for _, supported := range supported {
+		for _, offered := range offered {
+			if offered == supported {
+				return []string{offered}
+			}
+		}
+	}
+	return offered
+}
 
 func main() {
 	// Serve test folder.
@@ -25,6 +37,19 @@ func main() {
 			panic(err)
 		}
 	}))
+
+	http.Handle("/ws/subprotocols", &websocket.Server{
+		Handshake: func(c *websocket.Config, r *http.Request) error {
+			c.Protocol = negotiateProtocol(c.Protocol, []string{"mqtt", "mqttv3.1"})
+			return nil
+		},
+		Handler: websocket.Handler(func(ws *websocket.Conn) {
+			err := websocket.Message.Send(ws, []byte(strings.Join(ws.Config().Protocol, ",")))
+			if err != nil {
+				panic(err)
+			}
+		}),
+	})
 
 	http.Handle("/ws/wait-30s", websocket.Handler(func(ws *websocket.Conn) {
 		<-time.After(30 * time.Second)

@@ -65,9 +65,9 @@ const (
 	Closed ReadyState = 3
 )
 
-// New creates a new low-level WebSocket. It immediately returns the new
-// WebSocket.
-func New(url string) (ws *WebSocket, err error) {
+// New creates a new low-level WebSocket, setting the optional sub-protocols in
+// the header. It immediately returns the new WebSocket.
+func New(url string, protocols ...string) (ws *WebSocket, err error) {
 	defer func() {
 		e := recover()
 		if e == nil {
@@ -81,7 +81,15 @@ func New(url string) (ws *WebSocket, err error) {
 		}
 	}()
 
-	object := js.Global.Get("WebSocket").New(url)
+	args := []interface{}{url}
+	switch {
+	case len(protocols) == 1:
+		args = append(args, protocols[0])
+	case len(protocols) > 1:
+		args = append(args, protocols)
+	}
+
+	object := js.Global.Get("WebSocket").New(args...)
 
 	ws = &WebSocket{
 		Object: object,

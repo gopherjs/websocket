@@ -62,10 +62,11 @@ var errDeadlineReached = &deadlineErr{}
 // TODO(nightexcessive): Add a Dial function that allows a deadline to be
 // specified.
 
-// Dial opens a new WebSocket connection. It will block until the connection is
-// established or fails to connect.
-func Dial(url string) (net.Conn, error) {
-	ws, err := websocketjs.New(url)
+// Dial opens a new WebSocket connection, setting the optional sub-protocols in
+// the header. It will block until the connection is established or fails to
+// connect.
+func Dial(url string, protocols ...string) (net.Conn, error) {
+	ws, err := websocketjs.New(url, protocols...)
 	if err != nil {
 		return nil, err
 	}

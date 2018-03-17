@@ -159,6 +159,90 @@ func main() {
 
 		return nil
 	})
+	qunit.AsyncTest("Single Subprotocol", func() interface{} {
+		qunit.Expect(3)
+
+		go func() {
+			defer qunit.Start()
+
+			ws, err := websocket.Dial(wsBaseURL+"subprotocols", "mqttv3.1")
+			if err != nil {
+				qunit.Ok(false, fmt.Sprintf("Error opening WebSocket: %s", err))
+				return
+			}
+
+			qunit.Ok(true, "WebSocket opened")
+
+			var expectedData = []byte("mqttv3.1")
+
+			receivedData := make([]byte, len(expectedData))
+			n, err := ws.Read(receivedData)
+			if err != nil {
+				qunit.Ok(false, fmt.Sprintf("Error in first read: %s", err))
+				return
+			}
+			receivedData = receivedData[:n]
+
+			if !bytes.Equal(receivedData, expectedData) {
+				qunit.Ok(false, fmt.Sprintf("Received data did not match expected data. Got % x, expected % x.", receivedData, expectedData))
+			} else {
+				qunit.Ok(true, fmt.Sprintf("Received data: % x", receivedData))
+			}
+
+			_, err = ws.Read(receivedData)
+			if err == io.EOF {
+				qunit.Ok(true, "Received EOF")
+			} else if err != nil {
+				qunit.Ok(false, fmt.Sprintf("Unexpected error in second read: %s", err))
+			} else {
+				qunit.Ok(false, "Expected EOF in second read, got no error")
+			}
+		}()
+
+		return nil
+	})
+	qunit.AsyncTest("Multiple Subprotocols", func() interface{} {
+		qunit.Expect(3)
+
+		go func() {
+			defer qunit.Start()
+
+			ws, err := websocket.Dial(wsBaseURL+"subprotocols", "mqttv3.1", "mqtt")
+			if err != nil {
+				qunit.Ok(false, fmt.Sprintf("Error opening WebSocket: %s", err))
+				return
+			}
+
+			qunit.Ok(true, "WebSocket opened")
+
+			var expectedData = []byte("mqtt")
+
+			receivedData := make([]byte, len(expectedData))
+			n, err := ws.Read(receivedData)
+			if err != nil {
+				qunit.Ok(false, fmt.Sprintf("Error in first read: %s", err))
+				return
+			}
+			receivedData = receivedData[:n]
+
+			if !bytes.Equal(receivedData, expectedData) {
+				qunit.Ok(false, fmt.Sprintf("Received data did not match expected data. Got % x, expected % x.", receivedData, expectedData))
+			} else {
+				qunit.Ok(true, fmt.Sprintf("Received data: % x", receivedData))
+			}
+
+			_, err = ws.Read(receivedData)
+			if err == io.EOF {
+				qunit.Ok(true, "Received EOF")
+			} else if err != nil {
+				qunit.Ok(false, fmt.Sprintf("Unexpected error in second read: %s", err))
+			} else {
+				qunit.Ok(false, "Expected EOF in second read, got no error")
+			}
+		}()
+
+		return nil
+	})
 	qunit.AsyncTest("Timeout", func() interface{} {
 		qunit.Expect(2)
 
