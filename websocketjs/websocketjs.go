@@ -13,7 +13,7 @@ such as adding event listeners with callbacks.
 		// handle error
 	}
 
-	onOpen := func(ev *js.Object) {
+	onOpen := func(ev js.Value) {
 		err := ws.Send([]byte("Hello!")) // Send a binary frame.
 		// ...
 		err := ws.Send("Hello!") // Send a text frame.
@@ -30,7 +30,7 @@ such as adding event listeners with callbacks.
 */
 package websocketjs
 
-import "github.com/gopherjs/gopherjs/js"
+import "github.com/gopherjs/gopherwasm/js"
 
 // ReadyState represents the state that a WebSocket is in. For more information
 // about the available states, see
@@ -81,10 +81,10 @@ func New(url string) (ws *WebSocket, err error) {
 		}
 	}()
 
-	object := js.Global.Get("WebSocket").New(url)
+	object := js.Global().Get("WebSocket").New(url)
 
 	ws = &WebSocket{
-		Object: object,
+		v: object,
 	}
 
 	return
@@ -94,7 +94,11 @@ func New(url string) (ws *WebSocket, err error) {
 // object. For more information, see
 // http://dev.w3.org/html5/websockets/#the-websocket-interface
 type WebSocket struct {
-	*js.Object
+	v js.Value
+
+	onMessageCallback js.Callback
+	onOpenCallback    js.Callback
+	onCloseCallback   js.Callback
 
 	URL string `js:"url"`
 
@@ -105,31 +109,62 @@ type WebSocket struct {
 	// networking
 	Extensions string `js:"extensions"`
 	Protocol   string `js:"protocol"`
-
-	// messaging
-	BinaryType string `js:"binaryType"`
 }
 
-// AddEventListener provides the ability to bind callback
-// functions to the following available events:
-// open, error, close, message
-func (ws *WebSocket) AddEventListener(typ string, useCapture bool, listener func(*js.Object)) {
-	ws.Call("addEventListener", typ, listener, useCapture)
+func (ws *WebSocket) Release() {
+	ws.onMessageCallback.Release()
+	ws.onOpenCallback.Release()
+	ws.onCloseCallback.Release()
 }
 
-// RemoveEventListener removes a previously bound callback function
-func (ws *WebSocket) RemoveEventListener(typ string, useCapture bool, listener func(*js.Object)) {
-	ws.Call("removeEventListener", typ, listener, useCapture)
+// SetBinaryType provides the ability to set what format
+// websocket frames are in, possible values are:
+// "arraybuffer"
+func (ws *WebSocket) SetBinaryType(value string) {
+	ws.v.Set("binaryType", value)
 }
 
-// BUG(nightexcessive): When WebSocket.Send is called on a closed WebSocket, the
-// thrown error doesn't seem to be caught by recover.
+func (ws *WebSocket) BinaryType() string {
+	return ws.v.Get("binaryType").String()
+}
+
+func (ws *WebSocket) OnMessage(callback func(value []byte)) {
+	ws.onMessageCallback = js.NewCallback(func(ev []js.Value) {
+		go func() {
+			// Convert event.Data to []byte
+			var value []byte
+			data := ev[0].Get("data")
+			uint8Array := js.Global().Get("Uint8Array").New(data)
+			value = make([]byte, uint8Array.Get("byteLength").Int())
+			a := js.TypedArrayOf(value)
+			a.Call("set", uint8Array)
+			a.Release()
+
+			callback(value)
+		}()
+	})
+	ws.v.Call("addEventListener", "message", ws.onMessageCallback, false)
+}
+
+func (ws *WebSocket) OnClose(callback func()) {
+	ws.onCloseCallback = js.NewCallback(func(ev []js.Value) {
+		callback()
+	})
+	ws.v.Call("addEventListener", "close", ws.onCloseCallback, false)
+}
+
+func (ws *WebSocket) OnOpen(callback func()) {
+	ws.onOpenCallback = js.NewCallback(func(ev []js.Value) {
+		callback()
+	})
+	ws.v.Call("addEventListener", "open", ws.onOpenCallback, false)
+}
 
 // Send sends a message on the WebSocket. The data argument can be a string or a
-// *js.Object fulfilling the ArrayBufferView definition.
+// js.Value fulfilling the ArrayBufferView definition.
 //
 // See: http://dev.w3.org/html5/websockets/#dom-websocket-send
-func (ws *WebSocket) Send(data interface{}) (err error) {
+func (ws *WebSocket) Send(data []byte) (err error) {
 	defer func() {
 		e := recover()
 		if e == nil {
@@ -141,7 +176,9 @@ func (ws *WebSocket) Send(data interface{}) (err error) {
 			panic(e)
 		}
 	}()
-	ws.Object.Call("send", data)
+	a := js.TypedArrayOf(data)
+	ws.v.Call("send", a)
+	a.Release()
 	return
 }
 
@@ -164,7 +201,7 @@ func (ws *WebSocket) Close() (err error) {
 	// Use close code closeNormalClosure to indicate that the purpose
 	// for which the connection was established has been fulfilled.
 	// See https://tools.ietf.org/html/rfc6455#section-7.4.
-	ws.Object.Call("close", closeNormalClosure)
+	ws.v.Call("close", closeNormalClosure)
 	return
 }
 
