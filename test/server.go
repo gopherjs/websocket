@@ -26,6 +26,18 @@ func main() {
 		}
 	}))
 
+	http.Handle("/ws/multiframe-static", websocket.Handler(func(ws *websocket.Conn) {
+		err := websocket.Message.Send(ws, []byte{0x00, 0x01, 0x02})
+		if err != nil {
+			panic(err)
+		}
+		time.Sleep(500 * time.Millisecond)
+		err = websocket.Message.Send(ws, []byte{0x03, 0x04})
+		if err != nil {
+			panic(err)
+		}
+	}))
+
 	http.Handle("/ws/wait-30s", websocket.Handler(func(ws *websocket.Conn) {
 		<-time.After(30 * time.Second)
 	}))

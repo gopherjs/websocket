@@ -30,7 +30,7 @@ such as adding event listeners with callbacks.
 */
 package websocketjs
 
-import "github.com/gopherjs/gopherjs/js"
+import "syscall/js"
 
 // ReadyState represents the state that a WebSocket is in. For more information
 // about the available states, see
@@ -73,7 +73,7 @@ func New(url string) (ws *WebSocket, err error) {
 		if e == nil {
 			return
 		}
-		if jsErr, ok := e.(*js.Error); ok && jsErr != nil {
+		if jsErr, ok := e.(js.Error); ok {
 			ws = nil
 			err = jsErr
 		} else {
@@ -81,10 +81,10 @@ func New(url string) (ws *WebSocket, err error) {
 		}
 	}()
 
-	object := js.Global.Get("WebSocket").New(url)
+	webSocket := js.Global().Get("WebSocket").New(url)
 
 	ws = &WebSocket{
-		Object: object,
+		Value: webSocket,
 	}
 
 	return
@@ -94,42 +94,42 @@ func New(url string) (ws *WebSocket, err error) {
 // object. For more information, see
 // http://dev.w3.org/html5/websockets/#the-websocket-interface
 type WebSocket struct {
-	*js.Object
+	js.Value
 
-	URL string `js:"url"`
+	// URL string `js:"url"`
 
 	// ready state
-	ReadyState     ReadyState `js:"readyState"`
-	BufferedAmount uint32     `js:"bufferedAmount"`
+	// ReadyState     ReadyState `js:"readyState"`
+	// BufferedAmount uint32     `js:"bufferedAmount"`
 
 	// networking
-	Extensions string `js:"extensions"`
-	Protocol   string `js:"protocol"`
+	// Extensions string `js:"extensions"`
+	// Protocol   string `js:"protocol"`
 
 	// messaging
-	BinaryType string `js:"binaryType"`
+	// BinaryType string `js:"binaryType"`
 }
 
 // AddEventListener provides the ability to bind callback
 // functions to the following available events:
 // open, error, close, message
-func (ws *WebSocket) AddEventListener(typ string, useCapture bool, listener func(*js.Object)) {
-	ws.Call("addEventListener", typ, listener, useCapture)
+func (ws *WebSocket) AddEventListener(typ string, callback js.Callback) {
+	ws.Call("addEventListener", typ, callback)
 }
 
 // RemoveEventListener removes a previously bound callback function
-func (ws *WebSocket) RemoveEventListener(typ string, useCapture bool, listener func(*js.Object)) {
-	ws.Call("removeEventListener", typ, listener, useCapture)
+func (ws *WebSocket) RemoveEventListener(typ string, callback js.Callback) {
+	ws.Call("removeEventListener", typ, callback)
 }
 
 // BUG(nightexcessive): When WebSocket.Send is called on a closed WebSocket, the
 // thrown error doesn't seem to be caught by recover.
 
 // Send sends a message on the WebSocket. The data argument can be a string or a
-// *js.Object fulfilling the ArrayBufferView definition.
+// js.Value fulfilling the ArrayBufferView definition.
 //
 // See: http://dev.w3.org/html5/websockets/#dom-websocket-send
-func (ws *WebSocket) Send(data interface{}) (err error) {
+func (ws *WebSocket) Send(data []byte) (err error) {
 	defer func() {
 		e := recover()
 		if e == nil {
@@ -141,7 +141,9 @@ func (ws *WebSocket) Send(data interface{}) (err error) {
 			panic(e)
 		}
 	}()
-	ws.Object.Call("send", data)
+	dataArray := js.TypedArrayOf(data)
+	ws.Value.Call("send", dataArray)
+	dataArray.Release()
 	return
 }
 
@@ -164,7 +166,7 @@ func (ws *WebSocket) Close() (err error) {
 	// Use close code closeNormalClosure to indicate that the purpose
 	// for which the connection was established has been fulfilled.
 	// See https://tools.ietf.org/html/rfc6455#section-7.4.
-	ws.Object.Call("close", closeNormalClosure)
+	ws.Value.Call("close", closeNormalClosure)
 	return
 }
 
