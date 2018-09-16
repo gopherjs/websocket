@@ -61,6 +61,23 @@ func main() {
 		<-time.After(30 * time.Second)
 	}))
 
+	http.Handle("/ws/echo", websocket.Handler(func(ws *websocket.Conn) {
+		for {
+			var toBeEchoed []byte
+			err := websocket.Message.Receive(ws, &toBeEchoed)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				panic(err)
+			}
+
+			err = websocket.Message.Send(ws, toBeEchoed)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}))
+
 	err := http.ListenAndServe(":3000", nil)
 	if err != nil {
 		panic(err)

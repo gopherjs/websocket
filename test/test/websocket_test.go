@@ -2,6 +2,7 @@ package websocket_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"io"
 	"testing"
 	"time"
@@ -80,6 +81,61 @@ func TestConnBinaryRead(t_ *testing.T) {
 		t.Fatalf("Unexpected error in second read: %s", err)
 	} else {
 		t.Fatalf("Expected EOF in second read, got no error")
+	}
+}
+
+func TestConnBinaryEcho(t_ *testing.T) {
+	t := testevents.Start(t_, "TestConnBinaryEcho", true)
+	defer t.Done()
+
+	data := make([]byte, 1024*1024)
+
+	totalN := 0
+	for totalN < len(data) {
+		sliceEnd := totalN + 65535
+		if sliceEnd > len(data) {
+			sliceEnd = len(data)
+		}
+		n, err := rand.Read(data[totalN:sliceEnd])
+		if err != nil {
+			t.Fatalf("Error in creating data: %s", err)
+		}
+		totalN = totalN + n
+	}
+
+	data = data[:totalN]
+
+	t.Logf("Created %d bytes to send", len(data))
+
+	ws, err := websocket.Dial(getWSBaseURL() + "echo")
+	if err != nil {
+		t.Fatalf("Error opening WebSocket: %s", err)
+	}
+	defer ws.Close()
+
+	t.Logf("WebSocket opened")
+
+	byteReader := bytes.NewReader(data)
+	nSent, err := io.Copy(ws, byteReader)
+	if err != nil {
+		t.Fatalf("Error sending data: %s", err)
+	}
+
+	t.Logf("Sent %d bytes", nSent)
+
+	receivedData := make([]byte, len(data)+128)
+	n, err := io.ReadAtLeast(ws, receivedData, len(data))
+	if err != nil {
+		t.Fatalf("Error in read: %s", err)
+	}
+	receivedData = receivedData[:n]
+
+	t.Logf("Received %d bytes", n)
+
+	if !bytes.Equal(receivedData, data) {
+		t.Fatalf("Received data did not match expected data.")
+	} else {
+		t.Logf("Received correct data")
 	}
 }
 
