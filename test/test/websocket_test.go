@@ -216,7 +216,7 @@ func TestConn1MBRead(t_ *testing.T) {
 	t.Logf("%d bytes successfuly read", bytesRead)
 }
 
-func TestWSTimeout(t_ *testing.T) {
+func TestConnTimeout(t_ *testing.T) {
 	t := testevents.Start(t_, "TestWSTimeout", true)
 	defer t.Done()
 
