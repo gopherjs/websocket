@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"io"
 	"net/http"
 	"time"
 
@@ -35,6 +37,23 @@ func main() {
 		err = websocket.Message.Send(ws, []byte{0x03, 0x04})
 		if err != nil {
 			panic(err)
+		}
+	}))
+
+	http.Handle("/ws/random-1mb", websocket.Handler(func(ws *websocket.Conn) {
+		for i := 0; i < 4; i++ {
+			data := make([]byte, 256*1024)
+			n, err := io.ReadAtLeast(rand.Reader, data, len(data))
+			if err != nil {
+				panic(err)
+			}
+
+			data = data[:n]
+
+			err = websocket.Message.Send(ws, data)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}))
 

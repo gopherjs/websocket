@@ -243,6 +243,32 @@ func TestConnMultiFrameRead(t_ *testing.T) {
 	}
 }
 
+func TestConn1MBRead(t_ *testing.T) {
+	t := testevents.Start(t_, "TestConn1MBRead", true)
+	defer t.Done()
+
+	ws, err := websocket.Dial(getWSBaseURL() + "random-1mb")
+	if err != nil {
+		t.Fatalf("Error opening WebSocket: %s", err)
+	}
+	defer ws.Close()
+
+	bytesRead := 0
+	data := make([]byte, 1024)
+	for i := 0; i < 1024; i++ {
+		n, err := io.ReadAtLeast(ws, data, len(data))
+		if err != nil {
+			t.Fatalf("Error reading 1024 bytes: %s", err)
+		}
+		bytesRead = bytesRead + n
+	}
+
+	if bytesRead != 1024*1024 {
+		t.Fatalf("Read %d bytes; expected %d bytes", bytesRead, 1024*1024)
+	}
+	t.Logf("%d bytes successfuly read", bytesRead)
+}
+
 func TestWSTimeout(t_ *testing.T) {
 	t := testevents.Start(t_, "TestWSTimeout", true)
 	defer t.Done()
