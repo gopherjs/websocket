@@ -141,9 +141,7 @@ func (ws *WebSocket) Send(data js.Value) (err error) {
 			panic(e)
 		}
 	}()
-	dataArray := js.TypedArrayOf(data)
-	ws.Value.Call("send", dataArray)
-	dataArray.Release()
+	ws.Value.Call("send", data)
 	return
 }
 
