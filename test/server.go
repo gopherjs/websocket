@@ -62,8 +62,9 @@ func main() {
 	}))
 
 	http.Handle("/ws/echo", websocket.Handler(func(ws *websocket.Conn) {
+		var toBeEchoed []byte
 		for {
-			var toBeEchoed []byte
+			toBeEchoed = toBeEchoed[:0]
 			err := websocket.Message.Receive(ws, &toBeEchoed)
 			if err == io.EOF {
 				break
