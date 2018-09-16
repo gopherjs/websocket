@@ -11,10 +11,10 @@ import (
 	"net"
 	"net/url"
 	"sync/atomic"
+	"syscall/js"
 	"time"
 
 	"github.com/gopherjs/websocket/websocketjs"
-	"syscall/js"
 )
 
 func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev js.Value) {
@@ -27,9 +27,6 @@ func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev js.Value) {
 // closeError allows a CloseEvent to be used as an error.
 type closeError struct {
 	js.Value
-	// Code     int    `js:"code"`
-	// Reason   string `js:"reason"`
-	// WasClean bool   `js:"wasClean"`
 }
 
 func (e *closeError) Error() string {
@@ -187,9 +184,10 @@ func (c *conn) bufferMessageEvents(write chan *messageEvent, read chan *messageE
 	}
 
 	getQueuedEvent := func() *messageEvent {
-		if len(queue) <= 0 {
+		if len(queue) == 0 {
 			return nil
 		}
+
 		return queue[0]
 	}
 
@@ -214,11 +212,7 @@ func (c *conn) bufferMessageEvents(write chan *messageEvent, read chan *messageE
 func (c *conn) handleFrame(message *messageEvent, ok bool) (*messageEvent, error) {
 	if !ok { // The channel has been closed
 		return nil, io.EOF
-	} /* else if message == nil {
-		// See onClose for the explanation about sending a nil item.
-		close(c.ch)
-		return nil, io.EOF
-	}*/
+	}
 
 	return message, nil
 }

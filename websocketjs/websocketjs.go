@@ -95,19 +95,6 @@ func New(url string) (ws *WebSocket, err error) {
 // http://dev.w3.org/html5/websockets/#the-websocket-interface
 type WebSocket struct {
 	js.Value
-
-	// URL string `js:"url"`
-
-	// ready state
-	// ReadyState     ReadyState `js:"readyState"`
-	// BufferedAmount uint32     `js:"bufferedAmount"`
-
-	// networking
-	// Extensions string `js:"extensions"`
-	// Protocol   string `js:"protocol"`
-
-	// messaging
-	// BinaryType string `js:"binaryType"`
 }
 
 // AddEventListener provides the ability to bind callback
