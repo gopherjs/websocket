@@ -1,136 +1,14 @@
-//go:generate gopherjs build -m index.go
-
 package websocket_test
 
 import (
 	"bytes"
-	"flag"
-	"fmt"
 	"io"
-	"sync"
-	"syscall/js"
 	"testing"
 	"time"
 
 	"github.com/LinearZoetrope/testevents"
 	"github.com/gopherjs/websocket"
-	"github.com/gopherjs/websocket/websocketjs"
 )
-
-func testStarted(ev testevents.Event) {
-	document := js.Global().Get("document")
-	body := document.Get("body")
-
-	outsideElement := document.Call("createElement", "div")
-	outsideElement.Set("id", ev.Name)
-
-	nameElement := document.Call("createElement", "span")
-	nameElement.Set("textContent", fmt.Sprintf("%s:", ev.Name))
-	outsideElement.Call("appendChild", nameElement)
-
-	nbspElement := document.Call("createElement", "span")
-	nbspElement.Set("innerHTML", "&nbsp;")
-	outsideElement.Call("appendChild", nbspElement)
-
-	body.Call("appendChild", outsideElement)
-}
-
-func testPassed(ev testevents.Event) {
-	document := js.Global().Get("document")
-	outsideElement := document.Call("getElementById", ev.Name)
-
-	statusElement := document.Call("createElement", "span")
-	statusElement.Set("textContent", "PASSED")
-	outsideElement.Call("appendChild", statusElement)
-}
-
-func testFailed(ev testevents.Event) {
-	document := js.Global().Get("document")
-	outsideElement := document.Call("getElementById", ev.Name)
-
-	statusElement := document.Call("createElement", "span")
-	statusElement.Set("textContent", "FAILED")
-	outsideElement.Call("appendChild", statusElement)
-}
-
-func init() {
-	testevents.Register(testevents.TestStarted, testevents.EventListener{testStarted, int(testevents.TestStarted)})
-	testevents.Register(testevents.TestPassed, testevents.EventListener{testPassed, int(testevents.TestPassed)})
-	testevents.Register(testevents.TestFailed, testevents.EventListener{testFailed, int(testevents.TestFailed)})
-
-	flag.Set("test.v", "true")
-	flag.Set("test.parallel", "4")
-}
-
-func getWSBaseURL() string {
-	location := js.Global().Get("window").Get("document").Get("location")
-
-	wsProtocol := "ws"
-	if location.Get("protocol").String() == "https:" {
-		wsProtocol = "wss"
-	}
-
-	return fmt.Sprintf("%s://%s:%s/ws/", wsProtocol, location.Get("hostname").String(), location.Get("port").String())
-}
-
-func TestWSInvalidURL(t_ *testing.T) {
-	t := testevents.Start(t_, "TestWSInvalidURL", true)
-	defer t.Done()
-
-	ws, err := websocketjs.New("blah://blah.example/invalid")
-	if err == nil {
-		ws.Close()
-		t.Fatalf("Got no error, but expected an invalid URL error")
-	}
-}
-
-func TestWSImmediateClose(t_ *testing.T) {
-	t := testevents.Start(t_, "TestWSImmediateClose", true)
-	defer t.Done()
-
-	ws, err := websocketjs.New(getWSBaseURL() + "immediate-close")
-	if err != nil {
-		t.Fatalf("Error opening WebSocket: %s", err)
-	}
-	defer ws.Close()
-
-	var wg sync.WaitGroup
-
-	var (
-		openCallback  js.Callback
-		closeCallback js.Callback
-	)
-
-	openCallback = js.NewEventCallback(0, func(ev js.Value) {
-		defer ws.RemoveEventListener("open", openCallback)
-
-		t.Logf("WebSocket opened")
-	})
-	defer openCallback.Release()
-	ws.AddEventListener("open", openCallback)
-
-	closeCallback = js.NewEventCallback(0, func(ev js.Value) {
-		defer wg.Done()
-		defer ws.RemoveEventListener("close", closeCallback)
-
-		const (
-			CloseNormalClosure    = 1000
-			CloseNoStatusReceived = 1005 // IE10 hates it when the server closes without sending a close reason
-		)
-
-		closeEventCode := ev.Get("code").Int()
-
-		if closeEventCode != CloseNormalClosure && closeEventCode != CloseNoStatusReceived {
-			t.Fatalf("WebSocket close was not clean (code %d)", closeEventCode)
-		}
-		t.Logf("WebSocket closed")
-	})
-	defer closeCallback.Release()
-	ws.AddEventListener("close", closeCallback)
-	wg.Add(1)
-
-	wg.Wait()
-}
 
 func TestConnImmediateClose(t_ *testing.T) {
 	t := testevents.Start(t_, "TestConnImmediateClose", true)
