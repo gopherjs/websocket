@@ -123,8 +123,8 @@ func TestConnBinaryEcho(t_ *testing.T) {
 
 	t.Logf("Sent %d bytes", nSent)
 
-	receivedData := make([]byte, len(data)+128)
-	n, err := io.ReadAtLeast(ws, receivedData, len(data))
+	receivedData := make([]byte, len(data))
+	n, err := io.ReadAtLeast(ws, receivedData, len(receivedData))
 	if err != nil {
 		t.Fatalf("Error in read: %s", err)
 	}
@@ -136,6 +136,19 @@ func TestConnBinaryEcho(t_ *testing.T) {
 		t.Fatalf("Received data did not match expected data.")
 	} else {
 		t.Logf("Received correct data")
+	}
+
+	receivedData = receivedData[:256]
+
+	// Check for extra data
+	ws.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	n, err = ws.Read(receivedData)
+	if n != 0 {
+		t.Fatalf("Extra data was received")
+	} else if err != nil && err.Error() == "i/o timeout: deadline reached" {
+		t.Logf("No extra data received")
+	} else if err != nil {
+		t.Fatalf("Error checking for extra data: %s", err)
 	}
 }
 
