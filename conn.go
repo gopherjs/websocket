@@ -70,7 +70,6 @@ func Dial(url string) (net.Conn, error) {
 	}
 	conn := &conn{
 		WebSocket: ws,
-		ch:        make(chan *messageEvent, 1),
 	}
 	conn.isClosed = new(uint32)
 	*conn.isClosed = 0
@@ -115,7 +114,8 @@ type conn struct {
 
 	isClosed *uint32
 
-	ch      chan *messageEvent
+	writeCh chan<- *messageEvent
+	readCh  <-chan *messageEvent
 	readBuf *bytes.Reader
 
 	onMessageCallback js.Callback
@@ -130,7 +130,7 @@ type messageEvent struct {
 }
 
 func (c *conn) onMessage(event js.Value) {
-	c.ch <- &messageEvent{Value: event}
+	c.writeCh <- &messageEvent{Value: event}
 }
 
 func (c *conn) onClose(event js.Value) {
@@ -138,7 +138,7 @@ func (c *conn) onClose(event js.Value) {
 	// closing get handled first.
 	swapped := atomic.CompareAndSwapUint32(c.isClosed, 0, 1)
 	if swapped {
-		close(c.ch)
+		close(c.writeCh)
 		c.RemoveEventListener("message", c.onMessageCallback)
 		c.onMessageCallback.Release()
 		c.RemoveEventListener("close", c.onCloseCallback)
@@ -156,6 +156,14 @@ func (c *conn) Close() error {
 // It should never be called more than once and is already called if Dial was
 // used to create the conn.
 func (c *conn) initialize() {
+	writeChan := make(chan *messageEvent)
+	readChan := make(chan *messageEvent)
+
+	c.writeCh = writeChan
+	c.readCh = readChan
+
+	go c.bufferMessageEvents(writeChan, readChan)
+
 	// We need this so that received binary data is in ArrayBufferView format so
 	// that it can easily be read.
 	c.Set("binaryType", "arraybuffer")
@@ -165,6 +173,40 @@ func (c *conn) initialize() {
 
 	c.AddEventListener("message", c.onMessageCallback)
 	c.AddEventListener("close", c.onCloseCallback)
+}
+
+func (c *conn) bufferMessageEvents(write chan *messageEvent, read chan *messageEvent) {
+	queue := make([]*messageEvent, 0, 16)
+
+	getReadChan := func() chan *messageEvent {
+		if len(queue) == 0 {
+			return nil
+		}
+
+		return read
+	}
+
+	getQueuedEvent := func() *messageEvent {
+		if len(queue) <= 0 {
+			return nil
+		}
+		return queue[0]
+	}
+
+	for len(queue) > 0 || write != nil {
+		select {
+		case newEvent, ok := <-write:
+			if !ok {
+				write = nil
+			} else {
+				queue = append(queue, newEvent)
+			}
+		case getReadChan() <- getQueuedEvent():
+			queue = queue[1:]
+		}
+	}
+
+	close(read)
 }
 
 // handleFrame handles a single frame received from the channel. This is a
@@ -190,7 +232,7 @@ func (c *conn) receiveFrame(observeDeadline bool) (*messageEvent, error) {
 		now := time.Now()
 		if now.After(c.readDeadline) {
 			select {
-			case item, ok := <-c.ch:
+			case item, ok := <-c.readCh:
 				return c.handleFrame(item, ok)
 			default:
 				return nil, errDeadlineReached
@@ -204,7 +246,7 @@ func (c *conn) receiveFrame(observeDeadline bool) (*messageEvent, error) {
 	}
 
 	select {
-	case item, ok := <-c.ch:
+	case item, ok := <-c.readCh:
 		return c.handleFrame(item, ok)
 	case <-deadlineChan:
 		return nil, errDeadlineReached
