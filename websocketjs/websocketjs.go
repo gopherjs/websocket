@@ -129,7 +129,7 @@ func (ws *WebSocket) RemoveEventListener(typ string, callback js.Callback) {
 // js.Value fulfilling the ArrayBufferView definition.
 //
 // See: http://dev.w3.org/html5/websockets/#dom-websocket-send
-func (ws *WebSocket) Send(data []byte) (err error) {
+func (ws *WebSocket) Send(data js.Value) (err error) {
 	defer func() {
 		e := recover()
 		if e == nil {

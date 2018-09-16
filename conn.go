@@ -303,7 +303,9 @@ func (c *conn) Read(b []byte) (n int, err error) {
 func (c *conn) Write(b []byte) (n int, err error) {
 	// []byte is converted to an Uint8Array by GopherJS, which fullfils the
 	// ArrayBufferView definition.
-	err = c.Send(b)
+	byteArray := js.TypedArrayOf(b)
+	defer byteArray.Release()
+	err = c.Send(byteArray.Value)
 	if err != nil {
 		return 0, err
 	}
