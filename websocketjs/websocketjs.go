@@ -30,7 +30,7 @@ such as adding event listeners with callbacks.
 */
 package websocketjs
 
-import "syscall/js"
+import "github.com/gopherjs/gopherwasm/js"
 
 // ReadyState represents the state that a WebSocket is in. For more information
 // about the available states, see

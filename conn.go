@@ -11,9 +11,9 @@ import (
 	"net"
 	"net/url"
 	"sync/atomic"
-	"syscall/js"
 	"time"
 
+	"github.com/gopherjs/gopherwasm/js"
 	"github.com/gopherjs/websocket/websocketjs"
 )
 
