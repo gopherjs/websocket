@@ -261,11 +261,6 @@ func getFrameData(obj js.Value) []byte {
 }
 
 func (c *conn) Read(b []byte) (n int, err error) {
-	// Fast path: Don't bother trying to read if given a 0-byte buffer to read into
-	if len(b) == 0 {
-		return 0, nil
-	}
-
 	if c.readBuf != nil {
 		n, err = c.readBuf.Read(b)
 		if err == io.EOF {
