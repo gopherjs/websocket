@@ -58,7 +58,25 @@ func main() {
 	}))
 
 	http.Handle("/ws/wait-30s", websocket.Handler(func(ws *websocket.Conn) {
-		<-time.After(30 * time.Second)
+		eofChan := make(chan struct{})
+		timeoutChan := time.After(30 * time.Second)
+
+		go func() {
+			buf := make([]byte, 2)
+			for n, err := ws.Read(buf); ; {
+				if err == io.EOF || n == 0 { // for some reason, the websocket package returns 0 byte reads instead of an io.EOF error
+					eofChan <- struct{}{}
+					return
+				} else if err != nil {
+					panic(err)
+				}
+			}
+		}()
+
+		select {
+		case <-eofChan:
+		case <-timeoutChan:
+		}
 	}))
 
 	http.Handle("/ws/echo", websocket.Handler(func(ws *websocket.Conn) {
