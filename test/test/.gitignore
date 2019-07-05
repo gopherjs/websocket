@@ -1,2 +1,4 @@
 # Ignore compiled code
 main.wasm
+main.js
+main.js.map

@@ -1,11 +1,13 @@
+// +build js,!wasm
+
 package websocket_test
 
 import (
 	"sync"
-	"syscall/js"
 	"testing"
 
 	"github.com/LinearZoetrope/testevents"
+	"github.com/gopherjs/gopherjs/js"
 	"github.com/gopherjs/websocket/websocketjs"
 )
 
@@ -32,38 +34,25 @@ func TestWSImmediateClose(t_ *testing.T) {
 
 	var wg sync.WaitGroup
 
-	var (
-		openCallback  js.Callback
-		closeCallback js.Callback
-	)
-
-	openCallback = js.NewEventCallback(0, func(ev js.Value) {
-		defer ws.RemoveEventListener("open", openCallback)
-
+	ws.AddEventListener("open", false, func(ev *js.Object) {
 		t.Logf("WebSocket opened")
 	})
-	defer openCallback.Release()
-	ws.AddEventListener("open", openCallback)
 
-	closeCallback = js.NewEventCallback(0, func(ev js.Value) {
-		defer wg.Done()
-		defer ws.RemoveEventListener("close", closeCallback)
-
+	ws.AddEventListener("close", false, func(ev *js.Object) {
 		const (
 			CloseNormalClosure    = 1000
 			CloseNoStatusReceived = 1005 // IE10 hates it when the server closes without sending a close reason
 		)
+		defer wg.Done()
 
 		closeEventCode := ev.Get("code").Int()
 
 		if closeEventCode != CloseNormalClosure && closeEventCode != CloseNoStatusReceived {
 			t.Fatalf("WebSocket close was not clean (code %d)", closeEventCode)
+			return
 		}
-		t.Logf("WebSocket closed")
+		t.Log("WebSocket closed")
 	})
-	defer closeCallback.Release()
-	ws.AddEventListener("close", closeCallback)
 	wg.Add(1)
-
 	wg.Wait()
 }

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
+// +build js
+
 package websocket
 
 import (
@@ -13,14 +15,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gopherjs/gopherwasm/js"
-	"github.com/gopherjs/websocket/websocketjs"
+	"syscall/js"
+
+	gjs "github.com/gopherjs/gopherjs/js"
 )
 
-func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev js.Value) {
-	return func(ev js.Value) {
+func beginHandlerOpen(ch chan error, removeHandlers func()) func(js.Value, []js.Value) interface{} {
+	return func(o js.Value, args []js.Value) interface{} {
 		removeHandlers()
 		close(ch)
+		return nil
 	}
 }
 
@@ -39,11 +43,12 @@ func (e *closeError) Error() string {
 	return fmt.Sprintf("CloseEvent: (%s) (%d) %s", cleanStmt, e.Get("code").Int(), e.Get("reason").String())
 }
 
-func beginHandlerClose(ch chan error, removeHandlers func()) func(ev js.Value) {
-	return func(ev js.Value) {
+func beginHandlerClose(ch chan error, removeHandlers func()) func(js.Value, []js.Value) interface{} {
+	return func(o js.Value, args []js.Value) interface{} {
 		removeHandlers()
-		ch <- &closeError{Value: ev}
+		ch <- &closeError{Value: args[0]}
 		close(ch)
+		return nil
 	}
 }
 
@@ -61,12 +66,34 @@ var errDeadlineReached = &deadlineErr{}
 // Dial opens a new WebSocket connection. It will block until the connection is
 // established or fails to connect.
 func Dial(url string) (net.Conn, error) {
-	ws, err := websocketjs.New(url)
+	var ws *webSocket
+	var err error
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if jsErr, ok := e.(*js.Error); ok {
+			ws = nil
+			err = *jsErr
+		} else if gjsErr, ok := e.(*gjs.Error); ok {
+			ws = nil
+			err = gjsErr
+		} else {
+			panic(e)
+		}
+	}()
+
+	webSock := js.Global().Get("WebSocket").New(url)
+
+	ws = &webSocket{
+		Value: webSock,
+	}
 	if err != nil {
 		return nil, err
 	}
 	conn := &conn{
-		WebSocket: ws,
+		webSocket: ws,
 	}
 	conn.isClosed = new(uint32)
 	*conn.isClosed = 0
@@ -75,8 +102,8 @@ func Dial(url string) (net.Conn, error) {
 	openCh := make(chan error, 1)
 
 	var (
-		openHandler  js.Callback
-		closeHandler js.Callback
+		openHandler  js.Func
+		closeHandler js.Func
 	)
 
 	// Handlers need to be removed to prevent a panic when the WebSocket closes
@@ -91,8 +118,8 @@ func Dial(url string) (net.Conn, error) {
 
 	// We have to use variables for the functions so that we can remove the
 	// event handlers afterwards.
-	openHandler = js.NewEventCallback(0, beginHandlerOpen(openCh, removeHandlers))
-	closeHandler = js.NewEventCallback(0, beginHandlerClose(openCh, removeHandlers))
+	openHandler = js.FuncOf(beginHandlerOpen(openCh, removeHandlers))
+	closeHandler = js.FuncOf(beginHandlerClose(openCh, removeHandlers))
 
 	ws.AddEventListener("open", openHandler)
 	ws.AddEventListener("close", closeHandler)
@@ -107,7 +134,7 @@ func Dial(url string) (net.Conn, error) {
 
 // conn is a high-level wrapper around WebSocket. It implements net.Conn interface.
 type conn struct {
-	*websocketjs.WebSocket
+	*webSocket
 
 	isClosed *uint32
 
@@ -115,8 +142,8 @@ type conn struct {
 	readCh  <-chan *messageEvent
 	readBuf *bytes.Reader
 
-	onMessageCallback js.Callback
-	onCloseCallback   js.Callback
+	onMessageCallback js.Func
+	onCloseCallback   js.Func
 
 	readDeadline time.Time
 }
@@ -126,11 +153,12 @@ type messageEvent struct {
 	// Data js.Value `js:"data"`
 }
 
-func (c *conn) onMessage(event js.Value) {
-	c.writeCh <- &messageEvent{Value: event}
+func (c *conn) onMessage(o js.Value, args []js.Value) interface{} {
+	c.writeCh <- &messageEvent{Value: args[0]}
+	return nil
 }
 
-func (c *conn) onClose(event js.Value) {
+func (c *conn) onClose(o js.Value, args []js.Value) interface{} {
 	// We queue nil to the end so that any messages received prior to
 	// closing get handled first.
 	swapped := atomic.CompareAndSwapUint32(c.isClosed, 0, 1)
@@ -141,11 +169,12 @@ func (c *conn) onClose(event js.Value) {
 		c.RemoveEventListener("close", c.onCloseCallback)
 		c.onCloseCallback.Release()
 	}
+	return nil
 }
 
 func (c *conn) Close() error {
-	err := c.WebSocket.Close()
-	c.onClose(js.Null())
+	err := c.webSocket.Close()
+	c.onClose(js.Null(), nil)
 	return err
 }
 
@@ -165,8 +194,8 @@ func (c *conn) initialize() {
 	// that it can easily be read.
 	c.Set("binaryType", "arraybuffer")
 
-	c.onMessageCallback = js.NewEventCallback(0, c.onMessage)
-	c.onCloseCallback = js.NewEventCallback(0, c.onClose)
+	c.onMessageCallback = js.FuncOf(c.onMessage)
+	c.onCloseCallback = js.FuncOf(c.onClose)
 
 	c.AddEventListener("message", c.onMessageCallback)
 	c.AddEventListener("close", c.onCloseCallback)
@@ -349,3 +378,72 @@ func (c *conn) SetReadDeadline(t time.Time) error {
 func (c *conn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
+
+type webSocket struct {
+	js.Value
+}
+
+// AddEventListener provides the ability to bind callback
+// functions to the following available events:
+// open, error, close, message
+func (ws *webSocket) AddEventListener(typ string, callback js.Func) {
+	ws.Call("addEventListener", typ, callback)
+}
+
+// RemoveEventListener removes a previously bound callback function
+func (ws *webSocket) RemoveEventListener(typ string, callback js.Func) {
+	ws.Call("removeEventListener", typ, callback)
+}
+
+// BUG(nightexcessive): When WebSocket.Send is called on a closed WebSocket, the
+// thrown error doesn't seem to be caught by recover.
+
+// Send sends a message on the WebSocket. The data argument can be a string or a
+// js.Value fulfilling the ArrayBufferView definition.
+//
+// See: http://dev.w3.org/html5/websockets/#dom-websocket-send
+func (ws *webSocket) Send(data js.Value) (err error) {
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if jsErr, ok := e.(*js.Error); ok && jsErr != nil {
+			err = jsErr
+		} else {
+			panic(e)
+		}
+	}()
+	ws.Value.Call("send", data)
+	return
+}
+
+// Close closes the underlying WebSocket.
+//
+// See: http://dev.w3.org/html5/websockets/#dom-websocket-close
+func (ws *webSocket) Close() (err error) {
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if jsErr, ok := e.(*js.Error); ok && jsErr != nil {
+			err = jsErr
+		} else {
+			panic(e)
+		}
+	}()
+
+	// Use close code closeNormalClosure to indicate that the purpose
+	// for which the connection was established has been fulfilled.
+	// See https://tools.ietf.org/html/rfc6455#section-7.4.
+	ws.Value.Call("close", closeNormalClosure)
+	return
+}
+
+// Close codes defined in RFC 6455, section 11.7.
+const (
+	// 1000 indicates a normal closure, meaning that the purpose for
+	// which the connection was established has been fulfilled.
+	closeNormalClosure = 1000
+)
