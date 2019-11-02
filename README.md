@@ -5,8 +5,6 @@ websocket
 
 Packages [websocket](https://godoc.org/github.com/gopherjs/websocket) and [websocketjs](https://godoc.org/github.com/gopherjs/websocket/websocketjs) provide high- and low-level bindings for the browser's WebSocket API (respectively).
 
-See [nhooyr.io/websocket](https://nhooyr.io/websocket) for a WASM WebSocket library.
-
 The high-level bindings offer a Dial function that returns a regular net.Conn.
 It can be used similarly to net package.
 
@@ -53,3 +51,8 @@ ws.AddEventListener("error", false, onError)
 err = ws.Close()
 // ...
 ```
+
+Alternatives
+------------
+
+-	[`nhooyr.io/websocket`](https://nhooyr.io/websocket) - WebSocket library with WebAssembly support.
