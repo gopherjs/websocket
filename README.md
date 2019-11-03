@@ -51,3 +51,8 @@ ws.AddEventListener("error", false, onError)
 err = ws.Close()
 // ...
 ```
+
+Alternatives
+------------
+
+-	[`nhooyr.io/websocket`](https://nhooyr.io/websocket) - WebSocket library with WebAssembly support.
