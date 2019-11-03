@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
+// +build js
+
 package websocket
 
 import (
@@ -10,44 +12,43 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"sync/atomic"
 	"time"
 
-	"github.com/gopherjs/gopherjs/js"
-	"github.com/gopherjs/websocket/websocketjs"
+	"syscall/js"
+
+	gjs "github.com/gopherjs/gopherjs/js"
 )
 
-func beginHandlerOpen(ch chan error, removeHandlers func()) func(ev *js.Object) {
-	return func(ev *js.Object) {
+func beginHandlerOpen(ch chan error, removeHandlers func()) func(js.Value, []js.Value) interface{} {
+	return func(o js.Value, args []js.Value) interface{} {
 		removeHandlers()
 		close(ch)
+		return nil
 	}
 }
 
 // closeError allows a CloseEvent to be used as an error.
 type closeError struct {
-	*js.Object
-	Code     int    `js:"code"`
-	Reason   string `js:"reason"`
-	WasClean bool   `js:"wasClean"`
+	js.Value
 }
 
 func (e *closeError) Error() string {
 	var cleanStmt string
-	if e.WasClean {
+	if e.Get("wasClean").Bool() {
 		cleanStmt = "clean"
 	} else {
 		cleanStmt = "unclean"
 	}
-	return fmt.Sprintf("CloseEvent: (%s) (%d) %s", cleanStmt, e.Code, e.Reason)
+	return fmt.Sprintf("CloseEvent: (%s) (%d) %s", cleanStmt, e.Get("code").Int(), e.Get("reason").String())
 }
 
-func beginHandlerClose(ch chan error, removeHandlers func()) func(ev *js.Object) {
-	return func(ev *js.Object) {
+func beginHandlerClose(ch chan error, removeHandlers func()) func(js.Value, []js.Value) interface{} {
+	return func(o js.Value, args []js.Value) interface{} {
 		removeHandlers()
-		go func() {
-			ch <- &closeError{Object: ev}
-			close(ch)
-		}()
+		ch <- &closeError{Value: args[0]}
+		close(ch)
+		return nil
 	}
 }
 
@@ -65,38 +66,63 @@ var errDeadlineReached = &deadlineErr{}
 // Dial opens a new WebSocket connection. It will block until the connection is
 // established or fails to connect.
 func Dial(url string) (net.Conn, error) {
-	ws, err := websocketjs.New(url)
+	var ws *webSocket
+	var err error
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if jsErr, ok := e.(*js.Error); ok {
+			ws = nil
+			err = *jsErr
+		} else if gjsErr, ok := e.(*gjs.Error); ok {
+			ws = nil
+			err = gjsErr
+		} else {
+			panic(e)
+		}
+	}()
+
+	webSock := js.Global().Get("WebSocket").New(url)
+
+	ws = &webSocket{
+		Value: webSock,
+	}
 	if err != nil {
 		return nil, err
 	}
 	conn := &conn{
-		WebSocket: ws,
-		ch:        make(chan *messageEvent, 1),
+		webSocket: ws,
 	}
+	conn.isClosed = new(uint32)
+	*conn.isClosed = 0
 	conn.initialize()
 
 	openCh := make(chan error, 1)
 
 	var (
-		openHandler  func(ev *js.Object)
-		closeHandler func(ev *js.Object)
+		openHandler  js.Func
+		closeHandler js.Func
 	)
 
 	// Handlers need to be removed to prevent a panic when the WebSocket closes
 	// immediately and fires both open and close before they can be removed.
 	// This way, handlers are removed before the channel is closed.
 	removeHandlers := func() {
-		ws.RemoveEventListener("open", false, openHandler)
-		ws.RemoveEventListener("close", false, closeHandler)
+		ws.RemoveEventListener("open", openHandler)
+		ws.RemoveEventListener("close", closeHandler)
+		openHandler.Release()
+		closeHandler.Release()
 	}
 
 	// We have to use variables for the functions so that we can remove the
 	// event handlers afterwards.
-	openHandler = beginHandlerOpen(openCh, removeHandlers)
-	closeHandler = beginHandlerClose(openCh, removeHandlers)
+	openHandler = js.FuncOf(beginHandlerOpen(openCh, removeHandlers))
+	closeHandler = js.FuncOf(beginHandlerClose(openCh, removeHandlers))
 
-	ws.AddEventListener("open", false, openHandler)
-	ws.AddEventListener("close", false, closeHandler)
+	ws.AddEventListener("open", openHandler)
+	ws.AddEventListener("close", closeHandler)
 
 	err, ok := <-openCh
 	if ok && err != nil {
@@ -108,53 +134,112 @@ func Dial(url string) (net.Conn, error) {
 
 // conn is a high-level wrapper around WebSocket. It implements net.Conn interface.
 type conn struct {
-	*websocketjs.WebSocket
+	*webSocket
 
-	ch      chan *messageEvent
+	isClosed *uint32
+
+	writeCh chan<- *messageEvent
+	readCh  <-chan *messageEvent
 	readBuf *bytes.Reader
+
+	onMessageCallback js.Func
+	onCloseCallback   js.Func
 
 	readDeadline time.Time
 }
 
 type messageEvent struct {
-	*js.Object
-	Data *js.Object `js:"data"`
+	js.Value
+	// Data js.Value `js:"data"`
 }
 
-func (c *conn) onMessage(event *js.Object) {
-	go func() {
-		c.ch <- &messageEvent{Object: event}
-	}()
+func (c *conn) onMessage(o js.Value, args []js.Value) interface{} {
+	c.writeCh <- &messageEvent{Value: args[0]}
+	return nil
 }
 
-func (c *conn) onClose(event *js.Object) {
-	go func() {
-		// We queue nil to the end so that any messages received prior to
-		// closing get handled first.
-		c.ch <- nil
-	}()
+func (c *conn) onClose(o js.Value, args []js.Value) interface{} {
+	// We queue nil to the end so that any messages received prior to
+	// closing get handled first.
+	swapped := atomic.CompareAndSwapUint32(c.isClosed, 0, 1)
+	if swapped {
+		close(c.writeCh)
+		c.RemoveEventListener("message", c.onMessageCallback)
+		c.onMessageCallback.Release()
+		c.RemoveEventListener("close", c.onCloseCallback)
+		c.onCloseCallback.Release()
+	}
+	return nil
+}
+
+func (c *conn) Close() error {
+	err := c.webSocket.Close()
+	c.onClose(js.Null(), nil)
+	return err
 }
 
 // initialize adds all of the event handlers necessary for a conn to function.
 // It should never be called more than once and is already called if Dial was
 // used to create the conn.
 func (c *conn) initialize() {
+	writeChan := make(chan *messageEvent)
+	readChan := make(chan *messageEvent)
+
+	c.writeCh = writeChan
+	c.readCh = readChan
+
+	go c.bufferMessageEvents(writeChan, readChan)
+
 	// We need this so that received binary data is in ArrayBufferView format so
 	// that it can easily be read.
-	c.BinaryType = "arraybuffer"
+	c.Set("binaryType", "arraybuffer")
 
-	c.AddEventListener("message", false, c.onMessage)
-	c.AddEventListener("close", false, c.onClose)
+	c.onMessageCallback = js.FuncOf(c.onMessage)
+	c.onCloseCallback = js.FuncOf(c.onClose)
+
+	c.AddEventListener("message", c.onMessageCallback)
+	c.AddEventListener("close", c.onCloseCallback)
+}
+
+func (c *conn) bufferMessageEvents(write chan *messageEvent, read chan *messageEvent) {
+	queue := make([]*messageEvent, 0, 16)
+
+	getReadChan := func() chan *messageEvent {
+		if len(queue) == 0 {
+			return nil
+		}
+
+		return read
+	}
+
+	getQueuedEvent := func() *messageEvent {
+		if len(queue) == 0 {
+			return nil
+		}
+
+		return queue[0]
+	}
+
+	for len(queue) > 0 || write != nil {
+		select {
+		case newEvent, ok := <-write:
+			if !ok {
+				write = nil
+			} else {
+				queue = append(queue, newEvent)
+			}
+		case getReadChan() <- getQueuedEvent():
+			queue = queue[1:]
+		}
+	}
+
+	close(read)
 }
 
 // handleFrame handles a single frame received from the channel. This is a
 // convenience funciton to dedupe code for the multiple deadline cases.
 func (c *conn) handleFrame(message *messageEvent, ok bool) (*messageEvent, error) {
 	if !ok { // The channel has been closed
-		return nil, io.EOF
-	} else if message == nil {
-		// See onClose for the explanation about sending a nil item.
-		close(c.ch)
 		return nil, io.EOF
 	}
 
@@ -170,7 +255,7 @@ func (c *conn) receiveFrame(observeDeadline bool) (*messageEvent, error) {
 		now := time.Now()
 		if now.After(c.readDeadline) {
 			select {
-			case item, ok := <-c.ch:
+			case item, ok := <-c.readCh:
 				return c.handleFrame(item, ok)
 			default:
 				return nil, errDeadlineReached
@@ -184,18 +269,22 @@ func (c *conn) receiveFrame(observeDeadline bool) (*messageEvent, error) {
 	}
 
 	select {
-	case item, ok := <-c.ch:
+	case item, ok := <-c.readCh:
 		return c.handleFrame(item, ok)
 	case <-deadlineChan:
 		return nil, errDeadlineReached
 	}
 }
 
-func getFrameData(obj *js.Object) []byte {
+func getFrameData(obj js.Value) []byte {
 	// Check if it's an array buffer. If so, convert it to a Go byte slice.
-	if constructor := obj.Get("constructor"); constructor == js.Global.Get("ArrayBuffer") {
-		uint8Array := js.Global.Get("Uint8Array").New(obj)
-		return uint8Array.Interface().([]byte)
+	if obj.InstanceOf(js.Global().Get("ArrayBuffer")) {
+		uint8Array := js.Global().Get("Uint8Array").New(obj)
+		data := make([]byte, uint8Array.Length())
+		for i, arrayLen := 0, uint8Array.Length(); i < arrayLen; i++ {
+			data[i] = byte(uint8Array.Index(i).Int())
+		}
+		return data
 	}
 	return []byte(obj.String())
 }
@@ -221,7 +310,7 @@ func (c *conn) Read(b []byte) (n int, err error) {
 		return 0, err
 	}
 
-	receivedBytes := getFrameData(frame.Data)
+	receivedBytes := getFrameData(frame.Get("data"))
 
 	n = copy(b, receivedBytes)
 	// Fast path: The entire frame's contents have been copied into b.
@@ -237,7 +326,9 @@ func (c *conn) Read(b []byte) (n int, err error) {
 func (c *conn) Write(b []byte) (n int, err error) {
 	// []byte is converted to an Uint8Array by GopherJS, which fullfils the
 	// ArrayBufferView definition.
-	err = c.Send(b)
+	byteArray := js.TypedArrayOf(b)
+	defer byteArray.Release()
+	err = c.Send(byteArray.Value)
 	if err != nil {
 		return 0, err
 	}
@@ -258,7 +349,7 @@ func (c *conn) LocalAddr() net.Addr {
 // RemoteAddr returns the remote network address, based on
 // websocket.WebSocket.URL.
 func (c *conn) RemoteAddr() net.Addr {
-	wsURL, err := url.Parse(c.URL)
+	wsURL, err := url.Parse(c.Get("url").String())
 	if err != nil {
 		// TODO(nightexcessive): Should we be panicking for this?
 		panic(err)
@@ -287,3 +378,72 @@ func (c *conn) SetReadDeadline(t time.Time) error {
 func (c *conn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
+
+type webSocket struct {
+	js.Value
+}
+
+// AddEventListener provides the ability to bind callback
+// functions to the following available events:
+// open, error, close, message
+func (ws *webSocket) AddEventListener(typ string, callback js.Func) {
+	ws.Call("addEventListener", typ, callback)
+}
+
+// RemoveEventListener removes a previously bound callback function
+func (ws *webSocket) RemoveEventListener(typ string, callback js.Func) {
+	ws.Call("removeEventListener", typ, callback)
+}
+
+// BUG(nightexcessive): When WebSocket.Send is called on a closed WebSocket, the
+// thrown error doesn't seem to be caught by recover.
+
+// Send sends a message on the WebSocket. The data argument can be a string or a
+// js.Value fulfilling the ArrayBufferView definition.
+//
+// See: http://dev.w3.org/html5/websockets/#dom-websocket-send
+func (ws *webSocket) Send(data js.Value) (err error) {
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if jsErr, ok := e.(*js.Error); ok && jsErr != nil {
+			err = jsErr
+		} else {
+			panic(e)
+		}
+	}()
+	ws.Value.Call("send", data)
+	return
+}
+
+// Close closes the underlying WebSocket.
+//
+// See: http://dev.w3.org/html5/websockets/#dom-websocket-close
+func (ws *webSocket) Close() (err error) {
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if jsErr, ok := e.(*js.Error); ok && jsErr != nil {
+			err = jsErr
+		} else {
+			panic(e)
+		}
+	}()
+
+	// Use close code closeNormalClosure to indicate that the purpose
+	// for which the connection was established has been fulfilled.
+	// See https://tools.ietf.org/html/rfc6455#section-7.4.
+	ws.Value.Call("close", closeNormalClosure)
+	return
+}
+
+// Close codes defined in RFC 6455, section 11.7.
+const (
+	// 1000 indicates a normal closure, meaning that the purpose for
+	// which the connection was established has been fulfilled.
+	closeNormalClosure = 1000
+)
